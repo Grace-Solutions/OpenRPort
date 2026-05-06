@@ -25,7 +25,7 @@ if [ -f "$CONFIG_SRC" ]; then
     sed -i "s|url = \".*\"|url = \"${PAIRING_URL_OVERRIDE}\"|g" "$CONFIG_LIVE"
   fi
 else
-  PORT="${PAIRING_INTERNAL_PORT:-9978}"
+  PORT="${PAIRING_INTERNAL_PORT:-8082}"
   FALLBACK_URL="${PAIRING_URL_OVERRIDE:-http://localhost:${PORT}}"
   cat > "$CONFIG_LIVE" <<CONF
 [server]

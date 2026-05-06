@@ -37,7 +37,7 @@ COPY --from=builder /out/rport-pairing /usr/local/bin/rport-pairing
 COPY Container/Pairing/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-EXPOSE 9978
+EXPOSE 8082
 
 USER rport-pairing
 
