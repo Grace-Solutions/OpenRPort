@@ -1,0 +1,274 @@
+.icon {
+	display: inline-block;
+	vertical-align: middle;
+}
+.rounded-1 {
+	border-bottom-left-radius: .25rem;
+	border-top-left-radius: .25rem;
+}
+.dashboard-index {
+	min-height: calc(100vh - 100px);
+}
+
+input.primary,select.primary {
+    background-color: transparent;
+    border-color: #e5e7eb;
+    color: #374151;
+}
+
+
+input.primary:focus,select.primary:focus {
+    border-color: #00528d;
+}
+
+input.primary.error,input.primary.error:focus,select.primary.error,select.primary.error:focus {
+    border-color: #ef4444;
+}
+
+
+
+[multiple]:focus,[type=date]:focus,[type=datetime-local]:focus,[type=email]:focus,[type=month]:focus,[type=number]:focus,[type=password]:focus,[type=search]:focus,[type=tel]:focus,[type=text]:focus,[type=time]:focus,[type=url]:focus,[type=week]:focus,select:focus,textarea:focus {
+    --tw-ring-inset: var(--tw-empty, );
+    --tw-ring-offset-width: 0px;
+    --tw-ring-offset-color: #fff;
+    --tw-ring-color: #2563eb;
+    --tw-ring-offset-shadow: var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);
+    --tw-ring-shadow: var(--tw-ring-inset) 0 0 0 calc(1px + var(--tw-ring-offset-width)) var(--tw-ring-color);
+    border-color: #2563eb;
+    box-shadow: 0 0 #fff,0 0 0 1px #2563eb,var(--tw-shadow);
+    box-shadow: var(--tw-ring-offset-shadow),var(--tw-ring-shadow),var(--tw-shadow);
+    outline: 2px solid transparent;
+    outline-offset: 2px
+}
+input::-moz-placeholder,textarea::-moz-placeholder {
+    color: #6b7280;
+    opacity: 1
+}
+
+input::placeholder,textarea::placeholder {
+    color: #6b7280;
+    opacity: 1
+}
+
+::-webkit-datetime-edit-fields-wrapper {
+    padding: 0
+}
+
+::-webkit-date-and-time-value {
+    min-height: 1.5em
+}
+
+::-webkit-datetime-edit,::-webkit-datetime-edit-day-field,::-webkit-datetime-edit-hour-field,::-webkit-datetime-edit-meridiem-field,::-webkit-datetime-edit-millisecond-field,::-webkit-datetime-edit-minute-field,::-webkit-datetime-edit-month-field,::-webkit-datetime-edit-second-field,::-webkit-datetime-edit-year-field {
+    padding-bottom: 0;
+    padding-top: 0
+}
+
+[multiple] {
+    background-image: none;
+    background-position: 0 0;
+    background-repeat: unset;
+    background-size: initial;
+    padding-right: .75rem;
+    -webkit-print-color-adjust: unset;
+    print-color-adjust: unset
+}
+
+[type=checkbox],[type=radio] {
+    --tw-shadow: 0 0 #0000;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    background-color: #fff;
+    background-origin: border-box;
+    border-color: #6b7280;
+    border-width: 1px;
+    color: #2563eb;
+    display: inline-block;
+    flex-shrink: 0;
+    height: 1rem;
+    padding: 0;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    user-select: none;
+    vertical-align: middle;
+    width: 1rem
+}
+
+[type=checkbox] {
+    border-radius: 0
+}
+
+[type=radio] {
+    border-radius: 100%
+}
+
+[type=checkbox]:focus,[type=radio]:focus {
+    --tw-ring-inset: var(--tw-empty, );
+    --tw-ring-offset-width: 2px;
+    --tw-ring-offset-color: #fff;
+    --tw-ring-color: #2563eb;
+    --tw-ring-offset-shadow: var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);
+    --tw-ring-shadow: var(--tw-ring-inset) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color);
+    box-shadow: 0 0 0 2px #fff,0 0 0 4px #2563eb,var(--tw-shadow);
+    box-shadow: var(--tw-ring-offset-shadow),var(--tw-ring-shadow),var(--tw-shadow);
+    outline: 2px solid transparent;
+    outline-offset: 2px
+}
+
+[type=checkbox]:checked,[type=radio]:checked {
+    background-color: currentColor;
+    background-position: 50%;
+    background-repeat: no-repeat;
+    background-size: 100% 100%;
+    border-color: transparent
+}
+
+[type=checkbox]:checked {
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%23fff' viewBox='0 0 16 16'%3E%3Cpath d='M12.207 4.793a1 1 0 0 1 0 1.414l-5 5a1 1 0 0 1-1.414 0l-2-2a1 1 0 0 1 1.414-1.414L6.5 9.086l4.293-4.293a1 1 0 0 1 1.414 0z'/%3E%3C/svg%3E")
+}
+
+[type=radio]:checked {
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%23fff' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='3'/%3E%3C/svg%3E")
+}
+
+[type=checkbox]:checked:focus,[type=checkbox]:checked:hover,[type=radio]:checked:focus,[type=radio]:checked:hover {
+    background-color: currentColor;
+    border-color: transparent
+}
+[type=checkbox]:indeterminate {
+    background-color: currentColor;
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 16 16'%3E%3Cpath stroke='%23fff' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M4 8h8'/%3E%3C/svg%3E");
+    background-position: 50%;
+    background-repeat: no-repeat;
+    background-size: 100% 100%;
+    border-color: transparent
+}
+
+[type=checkbox]:indeterminate:focus,[type=checkbox]:indeterminate:hover {
+    background-color: currentColor;
+    border-color: transparent
+}
+
+[type=file] {
+    background: unset;
+    border-color: inherit;
+    border-radius: 0;
+    border-width: 0;
+    font-size: unset;
+    line-height: inherit;
+    padding: 0
+}
+[type=file]:focus {
+    outline: 1px solid ButtonText;
+    outline: 1px auto -webkit-focus-ring-color
+}
+
+.text-theme-inverted {
+    --tw-text-opacity: 1;
+    color: #374151;
+}
+.text-theme-inverted-light,.text-theme-inverted-lighter {
+    --tw-text-opacity: 1;
+    color: #4b5563;
+}
+.text-theme-label {
+    --tw-text-opacity: 1;
+    color: #6b7280;
+}
+
+.bg-theme {
+    --tw-bg-opacity: 1;
+    background-color: #fff;
+}
+.bg-theme-light {
+    --tw-bg-opacity: 1;
+    background-color: #f3f4f6;
+}
+.bg-theme-lighter {
+    --tw-bg-opacity: 1;
+    background-color: #f9fafb;
+}
+.bg-transparent {
+    background-color: transparent !important;
+}
+.bg-theme-backdrop\/75 {
+    background-color: #6b7280bf;
+}
+.bg-warning {
+    background-color: #ef6c00;
+    background-color: rgb(239 108 0/var(--tw-bg-opacity))
+}
+.text-black-087 {
+    color: #000000de;
+}
+.primary {
+    background-color: #00528d;
+}
+
+.secondary {
+    background-color: #c6f94c;
+}
+
+button.primary {
+    background-color: #00528d;
+    color: #fff
+}
+
+button.secondary {
+    background-color: #c6f94c;
+    color: #000
+}
+
+button.error {
+    background-color: #d1d5db;
+    color: #fff;
+}
+
+.primary-plain,button.primary.plain {
+    background-color: rgba(0, 82, 141, .02);
+    color: rgb(0, 82, 141);
+}
+
+button.error.plain {
+    background-color: rgba(239, 68, 68, .8);
+    color: rgb(239, 68, 68)
+}
+
+/*button.primary.plain:hover {*/
+/*    background-color: theme("colors.primary.plain-hover");*/
+/*    background-color: var(--primary-plain-hover)*/
+/*}*/
+
+/*button.error.plain:hover {*/
+/*    background-color: theme("colors.error.plain-hover");*/
+/*    background-color: var(--error-plain-hover)*/
+/*}*/
+
+button.error.plain:disabled,button.error:disabled,button.primary.plain:disabled,button.primary:disabled,button.secondary:disabled {
+    background-color: rgb(209, 213, 219);
+    color: #fff;
+}
+select {
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3E%3C/svg%3E");
+    background-position: right .5rem center;
+    background-repeat: no-repeat;
+    background-size: 1.5em 1.5em;
+    padding-right: 2.5rem !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact
+}
+[multiple],[type=date],[type=datetime-local],[type=email],[type=month],[type=number],[type=password],[type=search],[type=tel],[type=text],[type=time],[type=url],[type=week],select,textarea {
+    --tw-shadow: 0 0 #0000;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    background-color: #fff;
+    border-color: #6b7280;
+    border-radius: 0;
+    border-width: 1px;
+    font-size: 1rem;
+    line-height: 1.5rem;
+    padding: .5rem .75rem
+}
