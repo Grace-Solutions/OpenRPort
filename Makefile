@@ -1,4 +1,4 @@
-.PHONY: help setup subtrees update-subtrees generate-config build up down test lint validate-env
+.PHONY: help setup subtrees update-subtrees generate-config fetch-binaries prepare build up down test lint validate-env
 
 SHELL := /bin/bash
 
@@ -6,13 +6,18 @@ help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
 		awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
-setup: validate-env generate-config ## Full first-time setup (validate env, generate config)
+setup: prepare ## Full first-time setup (validate env, fetch binaries, generate config)
 
 validate-env: ## Validate required environment variables
 	@bash scripts/ValidateEnv.sh
 
 generate-config: validate-env ## Generate runtime config files from .env
 	@bash scripts/GenerateConfig.sh
+
+fetch-binaries: validate-env ## Pre-fetch rport agent binaries into Binaries/Data
+	@bash scripts/FetchAgentBinaries.sh
+
+prepare: validate-env generate-config fetch-binaries ## Validate env, write configs, fetch binaries
 
 subtrees: ## Add all git subtrees (first time only)
 	@bash scripts/AddSubtrees.sh
@@ -21,10 +26,10 @@ update-subtrees: ## Pull latest from all upstream subtrees
 	@bash scripts/UpdateSubtrees.sh
 
 lint: ## Lint shell scripts (requires shellcheck)
-	@which shellcheck >/dev/null 2>&1 || (echo "shellcheck not found – skipping"; exit 0)
-	@shellcheck scripts/*.sh
+	@which shellcheck >/dev/null 2>&1 || (echo "shellcheck not found - skipping"; exit 0)
+	@shellcheck scripts/*.sh Container/*/entrypoint.sh || true
 
-build: generate-config ## Build all container images
+build: prepare ## Build all container images (after prepare)
 	docker compose build
 
 up: build ## Build and start all services

@@ -1,10 +1,15 @@
 # Environment (never commit secrets)
 .env
 
-# Generated config (created by GenerateConfig.sh at runtime)
-Config/Server/rportd.conf
-Config/Pairing/config.toml
-Config/Ui/runtime.env
+# Local-only nginx for the operator's domain (sample is at docs/nginx.sample.conf)
+nginx.local.conf
+docs/nginx.txt
+
+# Stack data (bind mounts under STACK_BINDMOUNTROOT, default-local at ./Data)
+Data/
+
+# Legacy config dir (pre-bind-mount layout)
+Config/
 
 # Docker build cache
 .docker/

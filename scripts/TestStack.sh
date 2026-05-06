@@ -1,118 +1,133 @@
 #!/usr/bin/env bash
 # scripts/TestStack.sh
-# Full stack integration test. Run after 'make up'.
-# Exit 0 = all tests passed.
+# Full stack integration test. Run after 'make up'. Exit 0 = all tests passed.
+#
+# Each service is published on its own host port (no edge proxy in front of
+# the stack); the operator's external nginx is the single proxy layer and is
+# documented in docs/nginx.sample.conf.
 set -euo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 ENV_FILE="${REPO_ROOT}/.env"
 if [ -f "$ENV_FILE" ]; then set -a; source "$ENV_FILE"; set +a; fi
 
-SERVER_PORT="${OPENRPORT_SERVER_API_PORT:-8080}"
-PAIRING_PORT="${OPENRPORT_PAIRING_PORT:-9978}"
-UI_PORT="${OPENRPORT_UI_PORT:-3000}"
-PAIRING_BASE="${OPENRPORT_PAIRING_BASE_PATH:-/pairing}"
+STACK_BINDMOUNTROOT="${STACK_BINDMOUNTROOT:-/mnt/data/docker/stacks}"
+HOST="${TESTSTACK_HOST:-127.0.0.1}"
+
+SERVER_API_PUBLISH_PORT="${SERVER_API_PUBLISH_PORT:-8080}"
+SERVER_CLIENT_PUBLISH_PORT="${SERVER_CLIENT_PUBLISH_PORT:-8081}"
+PAIRING_PUBLISH_PORT="${PAIRING_PUBLISH_PORT:-9978}"
+UI_PUBLISH_PORT="${UI_PUBLISH_PORT:-3000}"
+BINARIES_PUBLISH_PORT="${BINARIES_PUBLISH_PORT:-8800}"
+BINARIES_BASE="${OPENRPORT_BINARIES_BASE_PATH:-/binaries}"
+UI_BASE="${OPENRPORT_UI_BASE_PATH:-/ui}"
+
+SERVER_API="http://${HOST}:${SERVER_API_PUBLISH_PORT}"
+PAIRING="http://${HOST}:${PAIRING_PUBLISH_PORT}"
+UI="http://${HOST}:${UI_PUBLISH_PORT}"
+BINARIES="http://${HOST}:${BINARIES_PUBLISH_PORT}"
+
+API_USER="${RPORTD_API_USER:-admin}"
+API_PASS="${RPORTD_API_PASSWORD:-}"
 
 PASS=0; FAIL=0
-
 pass() { echo "  [PASS] $*"; PASS=$((PASS+1)); }
 fail() { echo "  [FAIL] $*" >&2; FAIL=$((FAIL+1)); }
 
+http_status() {
+  curl -s -o /dev/null -w "%{http_code}" --max-time 8 "$@" 2>/dev/null || echo "000"
+}
+
 http_ok() {
-  local label="$1" url="$2"
-  local code
-  code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "$url" 2>/dev/null || echo "000")
-  if [[ "$code" == "200" || "$code" == "401" ]]; then
-    pass "$label ($url) → HTTP $code"
+  local label="$1" url="$2" expected="${3:-200,401}"
+  local code; code=$(http_status "$url")
+  if [[ ",${expected}," == *",${code},"* ]]; then
+    pass "$label ($url) -> HTTP $code"
   else
-    fail "$label ($url) → HTTP $code (expected 200 or 401)"
+    fail "$label ($url) -> HTTP $code (expected one of $expected)"
   fi
 }
 
-echo "==> TestStack.sh"
+echo "==> TestStack.sh (host: ${HOST})"
 echo ""
 
-# ── 1. Container health ───────────────────────────────────────────────────────
+# 1. Container health
 echo "--- Container Status ---"
-for cname in openrport-server openrport-pairing openrport-ui; do
-  if docker ps --filter "name=${cname}" --filter "status=running" | grep -q "${cname}"; then
-    pass "$cname is running"
+for c in OPENRPORT-SERVER-00001 OPENRPORT-PAIRING-00001 OPENRPORT-UI-00001 OPENRPORT-BINARIES-00001; do
+  if docker ps --filter "name=^${c}$" --filter "status=running" --format '{{.Names}}' | grep -qx "${c}"; then
+    pass "$c is running"
   else
-    fail "$cname is NOT running"
+    fail "$c is NOT running"
   fi
 done
 
-# ── 2. Endpoint reachability ─────────────────────────────────────────────────
+# 2. Per-service endpoint reachability (each on its own published port)
 echo ""
-echo "--- Endpoint Reachability ---"
-http_ok "Server API"     "http://localhost:${SERVER_PORT}/api/v1/status"
-http_ok "Pairing root"   "http://localhost:${PAIRING_PORT}/"
-http_ok "UI"             "http://localhost:${UI_PORT}/"
+echo "--- Endpoint Reachability (per service) ---"
+http_ok "Server API"        "${SERVER_API}/api/v1/status"           "200,401"
+http_ok "Pairing /update"   "${PAIRING}/update"                     "200"
+http_ok "UI root"           "${UI}/"                                "200,301,302"
+http_ok "UI base path"      "${UI}${UI_BASE}/"                      "200"
+http_ok "Binaries healthz"  "${BINARIES}/healthz"                   "200"
+http_ok "Binaries manifest" "${BINARIES}${BINARIES_BASE}/manifest.json" "200"
 
-# ── 3. Pairing script generation ─────────────────────────────────────────────
+# 3. API authenticated status
 echo ""
-echo "--- Pairing Script Generation ---"
-PAIR_RESP=$(curl -s -X POST "http://localhost:${PAIRING_PORT}/" \
+echo "--- API Authenticated Probe ---"
+if [[ -n "$API_PASS" ]]; then
+  STATUS=$(curl -s -u "${API_USER}:${API_PASS}" --max-time 8 "${SERVER_API}/api/v1/status" || echo "")
+  if echo "$STATUS" | grep -q '"connect_url"'; then
+    pass "API /status returns connect_url"
+  else
+    fail "API /status missing connect_url. Body head: ${STATUS:0:200}"
+  fi
+  if echo "$STATUS" | grep -q '"pairing_url"'; then
+    pass "API /status returns pairing_url"
+  else
+    fail "API /status missing pairing_url"
+  fi
+else
+  fail "RPORTD_API_PASSWORD unset; cannot run authenticated probe"
+fi
+
+# 4. Pairing deposit + install-script generation
+echo ""
+echo "--- Pairing Deposit + Install Script ---"
+PAIR_RESP=$(curl -s --max-time 8 -X POST "${PAIRING}/" \
   -H "Content-Type: application/json" \
-  --data-raw '{"connect_url":"http://test-server:8080","client_id":"testclient","password":"testpass","fingerprint":"aa:bb:cc"}' \
-  2>/dev/null || echo "FAIL")
-
+  --data-raw '{"connect_url":"http://test-server:8080","client_id":"testclient","password":"testpass","fingerprint":"aa:bb:cc:dd:ee:ff:00:11:22:33:44:55:66:77:88:99"}' \
+  2>/dev/null || echo "")
 if echo "$PAIR_RESP" | grep -q "pairing_code"; then
   pass "Pairing deposit returned pairing_code"
   CODE=$(echo "$PAIR_RESP" | grep -o '"pairing_code":"[^"]*"' | cut -d'"' -f4)
   if [[ -n "$CODE" ]]; then
-    SCRIPT=$(curl -s "http://localhost:${PAIRING_PORT}/${CODE}" \
-      -H "User-Agent: curl/linux" 2>/dev/null || echo "")
-    if echo "$SCRIPT" | grep -q "test-server"; then
-      pass "Install script contains correct server URL"
+    SCRIPT_TMP=$(mktemp)
+    curl -s --max-time 8 "${PAIRING}/${CODE}" -H "User-Agent: curl/linux" > "$SCRIPT_TMP"
+    SCRIPT_BYTES=$(wc -c < "$SCRIPT_TMP")
+    if [ "$SCRIPT_BYTES" -lt 1000 ]; then
+      fail "Install script too small (${SCRIPT_BYTES}B) - render likely failed"
     else
-      fail "Install script missing server URL. Script: ${SCRIPT:0:200}"
+      pass "Install script rendered (${SCRIPT_BYTES}B)"
     fi
-    if echo "$SCRIPT" | grep -q "http"; then
-      pass "Install script contains valid URL"
-    else
-      fail "Install script appears malformed"
-    fi
+    grep -q "test-server" "$SCRIPT_TMP"      && pass "Install script contains pairing connect_url" \
+      || fail "Install script missing pairing connect_url (test-server)"
+    rm -f "$SCRIPT_TMP"
   fi
 else
-  fail "Pairing deposit failed. Response: ${PAIR_RESP:0:200}"
+  fail "Pairing deposit failed. Response head: ${PAIR_RESP:0:200}"
 fi
 
-# ── 4. Header discovery simulation ───────────────────────────────────────────
+# 5. Generated config sanity
 echo ""
-echo "--- Header Discovery Simulation ---"
-HEADER_RESP=$(curl -s -o /dev/null -w "%{http_code}" \
-  -H "X-Forwarded-Proto: https" \
-  -H "X-Forwarded-Host: rport.example.com" \
-  -H "X-Forwarded-Port: 443" \
-  "http://localhost:${PAIRING_PORT}/" 2>/dev/null || echo "000")
-if [[ "$HEADER_RESP" == "200" || "$HEADER_RESP" == "404" ]]; then
-  pass "Pairing service accepts proxy header requests (HTTP $HEADER_RESP)"
+echo "--- Generated Config Sanity ---"
+RPORTD_CONF="${STACK_BINDMOUNTROOT}/OpenRPort/Server/Config/rportd.conf"
+if [ -f "$RPORTD_CONF" ]; then
+  grep -q '^url *=' "$RPORTD_CONF"        && pass "rportd.conf has [server] url"        || fail "rportd.conf missing [server] url"
+  grep -q '^key_seed *=' "$RPORTD_CONF"   && pass "rportd.conf has key_seed"            || fail "rportd.conf missing key_seed"
+  grep -q '^jwt_secret *=' "$RPORTD_CONF" && pass "rportd.conf has [api] jwt_secret"    || fail "rportd.conf missing jwt_secret"
+  grep -q '^pairing_url *=' "$RPORTD_CONF" && pass "rportd.conf has pairing_url"        || fail "rportd.conf missing pairing_url"
 else
-  fail "Pairing service rejected proxy header request (HTTP $HEADER_RESP)"
-fi
-
-# ── 5. Subpath check (if in subpath mode) ────────────────────────────────────
-if [[ "${OPENRPORT_DEPLOYMENT_MODE:-subpath}" == "subpath" ]]; then
-  echo ""
-  echo "--- Subpath Mode Check ---"
-  # Pairing should be accessible at its configured base path via the server port if proxied
-  # We test that the pairing URL in the generated config is correct
-  RPORTD_CONF="${REPO_ROOT}/Config/Server/rportd.conf"
-  if [ -f "$RPORTD_CONF" ]; then
-    if grep -q "pairing_url" "$RPORTD_CONF"; then
-      PAIRING_IN_CONF=$(grep "pairing_url" "$RPORTD_CONF" | cut -d'"' -f2)
-      if [[ "$PAIRING_IN_CONF" == *"$PAIRING_BASE"* || "$PAIRING_IN_CONF" == *"pairing"* ]]; then
-        pass "rportd.conf pairing_url contains base path: $PAIRING_IN_CONF"
-      else
-        fail "rportd.conf pairing_url does not respect base path: $PAIRING_IN_CONF"
-      fi
-    else
-      fail "rportd.conf missing pairing_url"
-    fi
-  else
-    fail "Config/Server/rportd.conf not found – run make generate-config first"
-  fi
+  fail "$RPORTD_CONF not found - run 'make prepare' first"
 fi
 
 # ── Summary ───────────────────────────────────────────────────────────────────
