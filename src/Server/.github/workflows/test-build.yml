@@ -1,0 +1,49 @@
+name: Build, test and upload
+on: [push]
+
+jobs:
+  build_n_run:
+    name: Build, test and upload
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.21
+
+      - name: Build
+        # set rport version to {date-time}-{github-master-head-sha}
+        env:
+          RPORT_PLUS_PRIV_KEY: ${{ secrets.RPORT_PLUS_PRIV_KEY }}
+        run: |
+          echo "🚚 Building rport & rportd now ..."
+          BRANCH=$(git status|grep "On branch"|cut -d" " -f3|tr '/' _)
+          export VERSION=$(date -u +%y.%m%d.%H%M)-${BRANCH}
+          # $(git rev-parse HEAD)
+          go build -v -ldflags="-X 'github.com/openrport/openrport/share.BuildVersion=$VERSION'"  -o ./ ./cmd/...
+          echo "✅ Successfully build rport"
+          echo "$VERSION $(git rev-parse HEAD)" > version.txt
+
+      - name: Test Build
+        shell: bash
+        run: |
+          bash .github/scripts/start_rportd.sh
+          bash .github/scripts/start_rport.sh
+
+      - name: Upload Build to downloads.openrport.io
+        env:
+          UPLOAD_TOKEN: ${{ secrets.UPLOAD_TOKEN }}
+        shell: bash
+        run: |
+          VERSION=$(cat version.txt | cut -d" " -f1)
+          echo "🚚 Packaging Build $VERSION ..."
+          TAR=rport_${VERSION}_linux_x86_64.tar.gz
+          tar czf ${TAR} version.txt rport rportd
+          echo "✅ Successfully created package $TAR"
+          ls -lh $TAR
+          FOLDER=rport-test-builds
+          echo "🚚 Uploading $TAR to $FOLDER downloads"
+          curl -f https://download.openrport.io/exec/upload.php -H "Authentication: $UPLOAD_TOKEN" -F file=@${TAR} -F dest_dir="${FOLDER}"

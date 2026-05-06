@@ -1,0 +1,56 @@
+*.log
+*.msi
+*.wixobj
+*.wixpdb
+resource.syso
+.vscode/
+.idea
+.DS_Store
+vendor
+dist
+rport
+!cmd/rport
+rport.exe
+rportd
+!cmd/rportd
+rportd.exe
+deploy.sh
+# air
+.air.toml
+tmp/
+# Vuepress
+.vuepress/.cache
+.vuepress/.temp
+
+# dependencies
+node_modules
+
+# hugo
+docs/public
+docs/.hugo_build.lock
+
+# Yarn logs
+yarn-debug.log*
+yarn-error.log*
+
+# Ignore local configs
+rport-*.conf
+rportd-*.conf
+rport.conf
+rportd.conf
+cheat-sheet.txt
+
+# Ignore packages that might have not been removed from your local project folder
+*.rpm
+*.deb
+
+# Ignore the local evironment used to package publishing
+.pkg-env
+
+# resources genereated during tests
+*test-resources
+
+# plus dev
+rport-plus
+# local docroot
+docroot/
