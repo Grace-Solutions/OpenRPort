@@ -89,7 +89,7 @@ check_port_list() {
   for tok in $val; do
     tok="${tok#"${tok%%[![:space:]]*}"}"; tok="${tok%"${tok##*[![:space:]]}"}"
     if [[ ! "$tok" =~ ^[0-9]+(-[0-9]+)?$ ]]; then
-      err "$name has invalid token '$tok' (expected port or range like 20000-30000)"
+      err "$name has invalid token '$tok' (expected port or range like 38200-38400)"
       return
     fi
   done
