@@ -21,29 +21,56 @@ PAIRING_BASE="${OPENRPORT_PAIRING_BASE_PATH:-/pairing}"
 UI_BASE="${OPENRPORT_UI_BASE_PATH:-/ui}"
 BINARIES_BASE="${OPENRPORT_BINARIES_BASE_PATH:-/binaries}"
 
-# Per-service internal listen ports (config files live inside the container
-# so these are the in-container ports, not host-side publish ports).
+# Per-service listen ports. With network_mode: host these are also the
+# host-side ports -- there is no publish/internal distinction.
 SERVER_API_INTERNAL_PORT="${SERVER_API_INTERNAL_PORT:-8080}"
 SERVER_CLIENT_INTERNAL_PORT="${SERVER_CLIENT_INTERNAL_PORT:-8081}"
 PAIRING_INTERNAL_PORT="${PAIRING_INTERNAL_PORT:-9978}"
+UI_INTERNAL_PORT="${UI_INTERNAL_PORT:-3000}"
 
-# Host-side publish ports - used only to compute fallback PUBLIC URLs when
-# OPENRPORT_*_PUBLIC_URL is empty (i.e. local testing without an edge proxy).
-SERVER_API_PUBLISH_PORT="${SERVER_API_PUBLISH_PORT:-8080}"
-SERVER_CLIENT_PUBLISH_PORT="${SERVER_CLIENT_PUBLISH_PORT:-8081}"
-PAIRING_PUBLISH_PORT="${PAIRING_PUBLISH_PORT:-9978}"
-UI_PUBLISH_PORT="${UI_PUBLISH_PORT:-3000}"
+# Per-service bind addresses. Each falls back to OPENRPORT_BIND_ADDRESS,
+# which itself falls back to 0.0.0.0. On a VPS where nginx is collocated
+# with the stack and proxies all traffic, set OPENRPORT_*_BIND_ADDRESS to
+# 127.0.0.1 to keep the service loopback-only while still allowing the
+# tunnel port pool (used_ports) to be reachable from agents on whichever
+# interface is configured for the chisel listener.
+BIND_DEFAULT="${OPENRPORT_BIND_ADDRESS:-0.0.0.0}"
+SERVER_API_BIND="${OPENRPORT_SERVER_API_BIND_ADDRESS:-$BIND_DEFAULT}"
+SERVER_CLIENT_BIND="${OPENRPORT_SERVER_CLIENT_BIND_ADDRESS:-$BIND_DEFAULT}"
+PAIRING_BIND="${OPENRPORT_PAIRING_BIND_ADDRESS:-$BIND_DEFAULT}"
+
+# Tunnel port pool baked into rportd.conf [server]. used_ports is the pool
+# rportd allocates from for reverse tunnels; excluded_ports carves holes
+# inside that pool. Defaults match upstream rportd.
+TUNNEL_USED_PORTS="${OPENRPORT_TUNNEL_USED_PORTS:-20000-30000}"
+TUNNEL_EXCLUDED_PORTS="${OPENRPORT_TUNNEL_EXCLUDED_PORTS:-1-1024}"
+
+# Convert comma-separated lists into TOML array form: 'a','b','c'
+toml_array() {
+  local IFS=,
+  local out=""
+  for item in $1; do
+    item="${item#"${item%%[![:space:]]*}"}"
+    item="${item%"${item##*[![:space:]]}"}"
+    [ -z "$item" ] && continue
+    [ -n "$out" ] && out="$out, "
+    out="$out'$item'"
+  done
+  printf '%s' "$out"
+}
+TUNNEL_USED_PORTS_TOML=$(toml_array "$TUNNEL_USED_PORTS")
+TUNNEL_EXCLUDED_PORTS_TOML=$(toml_array "$TUNNEL_EXCLUDED_PORTS")
 
 # In local mode each service is fronted on its own host port. Pairing also
 # serves the static binaries under ${BINARIES_BASE} on the same port.
 # SERVER_URL is the agent-facing URL (port 8081) baked into rportd.conf and
 # install scripts; SERVER_API_URL is the browser-facing API URL (port 8080)
 # emitted into the UI runtime env. They diverge in standalone local testing.
-SERVER_URL="${OPENRPORT_SERVER_PUBLIC_URL:-http://localhost:${SERVER_CLIENT_PUBLISH_PORT}}"
-SERVER_API_URL="${OPENRPORT_SERVER_API_URL:-${OPENRPORT_SERVER_PUBLIC_URL:-http://localhost:${SERVER_API_PUBLISH_PORT}}}"
-PAIRING_URL="${OPENRPORT_PAIRING_PUBLIC_URL:-http://localhost:${PAIRING_PUBLISH_PORT}}"
-UI_URL="${OPENRPORT_UI_PUBLIC_URL:-http://localhost:${UI_PUBLISH_PORT}}"
-BINARIES_URL="${OPENRPORT_BINARIES_PUBLIC_URL:-http://localhost:${PAIRING_PUBLISH_PORT}${BINARIES_BASE}}"
+SERVER_URL="${OPENRPORT_SERVER_PUBLIC_URL:-http://localhost:${SERVER_CLIENT_INTERNAL_PORT}}"
+SERVER_API_URL="${OPENRPORT_SERVER_API_URL:-${OPENRPORT_SERVER_PUBLIC_URL:-http://localhost:${SERVER_API_INTERNAL_PORT}}}"
+PAIRING_URL="${OPENRPORT_PAIRING_PUBLIC_URL:-http://localhost:${PAIRING_INTERNAL_PORT}}"
+UI_URL="${OPENRPORT_UI_PUBLIC_URL:-http://localhost:${UI_INTERNAL_PORT}}"
+BINARIES_URL="${OPENRPORT_BINARIES_PUBLIC_URL:-http://localhost:${PAIRING_INTERNAL_PORT}${BINARIES_BASE}}"
 
 echo ""
 echo "==> Generating runtime config under ${ROOT}"
@@ -53,6 +80,8 @@ echo "    Server API URL  : $SERVER_API_URL"
 echo "    Pairing URL     : $PAIRING_URL"
 echo "    UI URL          : $UI_URL"
 echo "    Binaries URL    : $BINARIES_URL"
+echo "    Bind: api=${SERVER_API_BIND} client=${SERVER_CLIENT_BIND} pairing=${PAIRING_BIND}"
+echo "    Tunnels: used=${TUNNEL_USED_PORTS} excluded=${TUNNEL_EXCLUDED_PORTS}"
 
 # ── Tier directories ───────────────────────────────────────────────────────
 mkdir -p \
@@ -68,16 +97,18 @@ cat > "$RPORTD_CONF" <<EOF
 # Re-run: make generate-config
 
 [server]
-address     = "0.0.0.0:${SERVER_CLIENT_INTERNAL_PORT}"
-url         = "${SERVER_URL}"
-data_dir    = "/var/lib/rport"
-key_seed    = "${RPORTD_KEY_SEED}"
-auth        = "${RPORTD_CLIENT_AUTH}"
-pairing_url = "${PAIRING_URL}"
+address        = "${SERVER_CLIENT_BIND}:${SERVER_CLIENT_INTERNAL_PORT}"
+url            = "${SERVER_URL}"
+data_dir       = "/var/lib/rport"
+key_seed       = "${RPORTD_KEY_SEED}"
+auth           = "${RPORTD_CLIENT_AUTH}"
+pairing_url    = "${PAIRING_URL}"
+used_ports     = [${TUNNEL_USED_PORTS_TOML}]
+excluded_ports = [${TUNNEL_EXCLUDED_PORTS_TOML}]
 auth_multiuse_creds = true
 
 [api]
-address     = "0.0.0.0:${SERVER_API_INTERNAL_PORT}"
+address     = "${SERVER_API_BIND}:${SERVER_API_INTERNAL_PORT}"
 auth        = "${RPORTD_API_USER:-admin}:${RPORTD_API_PASSWORD}"
 jwt_secret  = "${RPORTD_JWT_SECRET}"
 cors        = ["${RPORTD_CORS_ORIGINS:-*}"]
@@ -171,7 +202,7 @@ PAIRING_CONF="${ROOT}/Pairing/Config/config.toml"
 cat > "$PAIRING_CONF" <<EOF
 # Generated by GenerateConfig.sh - do not edit manually.
 [server]
-  address = "0.0.0.0:${PAIRING_INTERNAL_PORT}"
+  address = "${PAIRING_BIND}:${PAIRING_INTERNAL_PORT}"
   url     = "${PAIRING_URL}"
 EOF
 echo "    Wrote: Pairing/Config/config.toml"

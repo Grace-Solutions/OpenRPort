@@ -65,6 +65,7 @@ type APIListener struct {
 	fingerprint       string
 	apiSessions       *session.Cache
 	router            *mux.Router
+	handler           http.Handler
 	httpServer        *chshare.HTTPServer
 	requestLogOptions *requestlog.Options
 	accessLogFile     io.WriteCloser
@@ -337,7 +338,11 @@ func NewAPIListener(
 func (al *APIListener) Start(ctx context.Context, addr string) error {
 	al.Infof("API Listening on %s...", addr)
 
-	err := al.httpServer.GoListenAndServe(ctx, addr, al.router)
+	h := al.handler
+	if h == nil {
+		h = al.router
+	}
+	err := al.httpServer.GoListenAndServe(ctx, addr, h)
 	if err != nil {
 		return err
 	}

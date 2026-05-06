@@ -11,35 +11,32 @@
 #   1. cp .env.example .env && edit secrets
 #   2. make prepare      (fetches agent binaries, generates configs)
 #   3. make up           (build + start)
-#   4. Point your edge reverse proxy at the published ports below
+#   4. Point your edge reverse proxy at the host ports below
 #      and use docs/nginx.sample.conf as a starting point.
 #
-# ENDPOINTS (each service is published independently; route at the edge):
-#   - SERVER_CLIENT_PUBLISH_PORT (8081) -> rportd chisel WS (agent connect)
-#   - SERVER_API_PUBLISH_PORT    (8080) -> rportd HTTP API   (/api/v1/*)
-#   - PAIRING_PUBLISH_PORT       (9978) -> rport-pairing
-#                                          + static agent binaries at
-#                                          ${OPENRPORT_BINARIES_BASE_PATH}/*
-#   - UI_PUBLISH_PORT            (3000) -> Nuxt UI
+# NETWORKING:
+#   All three services run with network_mode: host. They listen directly on
+#   the host's network namespace -- no docker-proxy, no NAT, no published
+#   ports. This keeps the agent tunnel port pool (default 20000-30000)
+#   reachable without enumerating thousands of port mappings, and gives the
+#   operator one knob per service to control the bind address (defaulting
+#   to OPENRPORT_BIND_ADDRESS, typically 0.0.0.0 on a dedicated stack host
+#   or 127.0.0.1 when collocated with the edge reverse proxy on a VPS).
 #
-# Bind address for all published ports is ${OPENRPORT_BIND_ADDRESS:-0.0.0.0}
-# so an edge proxy on a different node can reach this host directly.
+# ENDPOINTS (each service listens on its own port on ${BIND_ADDRESS}):
+#   - SERVER_CLIENT_INTERNAL_PORT (8081) -> rportd chisel WS (agent connect)
+#                                           + agent reverse-tunnel ports
+#                                           (used_ports range, default
+#                                           20000-30000)
+#   - SERVER_API_INTERNAL_PORT    (8080) -> rportd HTTP API   (/api/v1/*)
+#   - PAIRING_INTERNAL_PORT       (9978) -> rport-pairing
+#                                           + static agent binaries at
+#                                           ${OPENRPORT_BINARIES_BASE_PATH}/*
+#   - UI_INTERNAL_PORT            (3000) -> Nuxt UI
 #
 #=============================================================================
 
 name: '${STACK_NAME:-stk-openrport-00001}'
-
-networks:
-  EXTERNAL:
-    name: 'OPENRPORT-EXTERNAL'
-    driver: bridge
-    internal: false
-    attachable: true
-  INTERNAL:
-    name: 'OPENRPORT-INTERNAL'
-    driver: bridge
-    internal: true
-    attachable: true
 
 services:
   Server:
@@ -67,18 +64,19 @@ services:
       RPORTD_JWT_SECRET: '${RPORTD_JWT_SECRET:-nWMPYqXtOFzCt2P517dC9FbjnQTBO0znCu5KExAYTxaXVmWddehvQzEBUbKLFjfuflw=}'
       RPORTD_CLIENT_AUTH: '${RPORTD_CLIENT_AUTH:-clientauth1:d8b1f5dd704773689cdf415b}'
       RPORTD_CORS_ORIGINS: '${RPORTD_CORS_ORIGINS:-*}'
-    networks:
-      INTERNAL:
-      EXTERNAL:
+    network_mode: host
     volumes:
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
       - "${STACK_BINDMOUNTROOT:-/mnt/data/docker/stacks}/OpenRPort/Server/Config:/etc/rport:rw"
       - "${STACK_BINDMOUNTROOT:-/mnt/data/docker/stacks}/OpenRPort/Server/Data:/var/lib/rport:rw"
       - "${STACK_BINDMOUNTROOT:-/mnt/data/docker/stacks}/OpenRPort/Server/Logs:/var/log/rport:rw"
-    ports:
-      - "${OPENRPORT_BIND_ADDRESS:-0.0.0.0}:${SERVER_API_PUBLISH_PORT:-8080}:${SERVER_API_INTERNAL_PORT:-8080}"
-      - "${OPENRPORT_BIND_ADDRESS:-0.0.0.0}:${SERVER_CLIENT_PUBLISH_PORT:-8081}:${SERVER_CLIENT_INTERNAL_PORT:-8081}"
+    # Documentary only -- network_mode: host means the listed ports are bound
+    # directly on the host. The actual bind address is set per-service in the
+    # generated rportd.conf via OPENRPORT_SERVER_*_BIND_ADDRESS.
+    expose:
+      - "${SERVER_API_INTERNAL_PORT:-8080}"
+      - "${SERVER_CLIENT_INTERNAL_PORT:-8081}"
     healthcheck:
       # /api/v1/status returns 401 (wget exit 6) without auth or 429 (exit 8)
       # when rate-limited; both prove the API is listening.
@@ -111,17 +109,15 @@ services:
       PAIRING_INTERNAL_PORT: '${PAIRING_INTERNAL_PORT:-9978}'
       RPORT_PAIRING_BINARIES_DIR: '/usr/share/rport-pairing/binaries'
       RPORT_PAIRING_BINARIES_PATH: '${OPENRPORT_BINARIES_BASE_PATH:-/binaries}'
-    networks:
-      INTERNAL:
-      EXTERNAL:
+    network_mode: host
     volumes:
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
       - "${STACK_BINDMOUNTROOT:-/mnt/data/docker/stacks}/OpenRPort/Pairing/Config:/etc/rport-pairing:rw"
       - "${STACK_BINDMOUNTROOT:-/mnt/data/docker/stacks}/OpenRPort/Pairing/Logs:/var/log/rport-pairing:rw"
       - "${STACK_BINDMOUNTROOT:-/mnt/data/docker/stacks}/OpenRPort/Binaries/Data:/usr/share/rport-pairing/binaries:ro"
-    ports:
-      - "${OPENRPORT_BIND_ADDRESS:-0.0.0.0}:${PAIRING_PUBLISH_PORT:-9978}:${PAIRING_INTERNAL_PORT:-9978}"
+    expose:
+      - "${PAIRING_INTERNAL_PORT:-9978}"
     healthcheck:
       test: ["CMD-SHELL", "wget --tries=1 --timeout=5 -qO- http://localhost:${PAIRING_INTERNAL_PORT:-9978}/update >/dev/null 2>&1; case $$? in 0|3|5|6|7|8) exit 0;; *) exit 1;; esac"]
       start_period: 15s
@@ -152,14 +148,13 @@ services:
       NUXT_PUBLIC_API_URL: '${OPENRPORT_SERVER_API_URL:-${OPENRPORT_SERVER_PUBLIC_URL:-}}'
       NUXT_PUBLIC_AUTH_MODE: '${OPENRPORT_UI_AUTH_MODE:-both}'
       UI_INTERNAL_PORT: '${UI_INTERNAL_PORT:-3000}'
-    networks:
-      INTERNAL:
-      EXTERNAL:
+      OPENRPORT_UI_BIND_ADDRESS: '${OPENRPORT_UI_BIND_ADDRESS:-${OPENRPORT_BIND_ADDRESS:-0.0.0.0}}'
+    network_mode: host
     volumes:
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
-    ports:
-      - "${OPENRPORT_BIND_ADDRESS:-0.0.0.0}:${UI_PUBLISH_PORT:-3000}:${UI_INTERNAL_PORT:-3000}"
+    expose:
+      - "${UI_INTERNAL_PORT:-3000}"
     healthcheck:
       test: ["CMD-SHELL", "wget --tries=1 --timeout=5 -qO- http://localhost:${UI_INTERNAL_PORT:-3000}/ >/dev/null 2>&1 || exit 1"]
       start_period: 30s

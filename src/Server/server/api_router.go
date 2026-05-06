@@ -266,8 +266,20 @@ func (al *APIListener) initRouter() {
 		r.Use(func(next http.Handler) http.Handler { return handlers.CombinedLoggingHandler(al.accessLogFile, next) })
 	}
 
+	r.Use(handlers.CompressHandler)
+	r.Use(handlers.RecoveryHandler(
+		handlers.PrintRecoveryStack(true),
+		handlers.RecoveryLogger(middleware.NewRecoveryLogger(al.Logger)),
+	))
+
+	al.router = r
+
+	// CORS is applied as an outer wrapper rather than a mux middleware so
+	// OPTIONS preflight requests reach rs/cors before gorilla/mux returns
+	// 404 for routes registered only with concrete methods (GET/POST/...).
+	var handler http.Handler = r
 	if len(al.config.API.CORS) > 0 {
-		r.Use(cors.New(cors.Options{
+		handler = cors.New(cors.Options{
 			AllowedOrigins:   al.config.API.CORS,
 			AllowCredentials: true,
 			AllowedMethods: []string{
@@ -278,14 +290,7 @@ func (al *APIListener) initRouter() {
 				http.MethodDelete,
 			},
 			AllowedHeaders: []string{"Authorization", "Content-Type"},
-		}).Handler)
+		}).Handler(r)
 	}
-
-	r.Use(handlers.CompressHandler)
-	r.Use(handlers.RecoveryHandler(
-		handlers.PrintRecoveryStack(true),
-		handlers.RecoveryLogger(middleware.NewRecoveryLogger(al.Logger)),
-	))
-
-	al.router = r
+	al.handler = handler
 }

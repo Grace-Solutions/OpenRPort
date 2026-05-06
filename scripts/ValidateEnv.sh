@@ -64,13 +64,39 @@ check_public_url "OPENRPORT_PAIRING_PUBLIC_URL"  "${OPENRPORT_PAIRING_PUBLIC_URL
 check_public_url "OPENRPORT_UI_PUBLIC_URL"       "${OPENRPORT_UI_PUBLIC_URL:-}"
 check_public_url "OPENRPORT_BINARIES_PUBLIC_URL" "${OPENRPORT_BINARIES_PUBLIC_URL:-}"
 
-# ── Network bind address ────────────────────────────────────────────────────
-BIND_ADDR="${OPENRPORT_BIND_ADDRESS:-0.0.0.0}"
-case "$BIND_ADDR" in
-  0.0.0.0|127.0.0.1|::|::1) ok "OPENRPORT_BIND_ADDRESS=$BIND_ADDR" ;;
-  *) if [[ "$BIND_ADDR" =~ ^[0-9a-fA-F.:]+$ ]]; then ok "OPENRPORT_BIND_ADDRESS=$BIND_ADDR"
-     else err "OPENRPORT_BIND_ADDRESS must be a valid IP address. Got: $BIND_ADDR"; fi ;;
-esac
+# ── Network bind addresses ──────────────────────────────────────────────────
+check_bind_addr() {
+  local name="$1" val="$2"
+  [ -z "$val" ] && return
+  case "$val" in
+    0.0.0.0|127.0.0.1|::|::1) ok "$name=$val"; return ;;
+  esac
+  if [[ "$val" =~ ^[0-9a-fA-F.:]+$ ]]; then ok "$name=$val"
+  else err "$name must be a valid IP address. Got: $val"; fi
+}
+check_bind_addr "OPENRPORT_BIND_ADDRESS"               "${OPENRPORT_BIND_ADDRESS:-0.0.0.0}"
+check_bind_addr "OPENRPORT_SERVER_API_BIND_ADDRESS"    "${OPENRPORT_SERVER_API_BIND_ADDRESS:-}"
+check_bind_addr "OPENRPORT_SERVER_CLIENT_BIND_ADDRESS" "${OPENRPORT_SERVER_CLIENT_BIND_ADDRESS:-}"
+check_bind_addr "OPENRPORT_PAIRING_BIND_ADDRESS"       "${OPENRPORT_PAIRING_BIND_ADDRESS:-}"
+check_bind_addr "OPENRPORT_UI_BIND_ADDRESS"            "${OPENRPORT_UI_BIND_ADDRESS:-}"
+
+# ── Tunnel port pool ────────────────────────────────────────────────────────
+check_port_list() {
+  local name="$1" val="$2"
+  [ -z "$val" ] && { warn "$name empty - using rportd default"; return; }
+  # accept comma-separated tokens that are either a single port or a range
+  local IFS=,
+  for tok in $val; do
+    tok="${tok#"${tok%%[![:space:]]*}"}"; tok="${tok%"${tok##*[![:space:]]}"}"
+    if [[ ! "$tok" =~ ^[0-9]+(-[0-9]+)?$ ]]; then
+      err "$name has invalid token '$tok' (expected port or range like 20000-30000)"
+      return
+    fi
+  done
+  ok "$name=$val"
+}
+check_port_list "OPENRPORT_TUNNEL_USED_PORTS"     "${OPENRPORT_TUNNEL_USED_PORTS:-}"
+check_port_list "OPENRPORT_TUNNEL_EXCLUDED_PORTS" "${OPENRPORT_TUNNEL_EXCLUDED_PORTS:-}"
 
 # ── Per-service ports ───────────────────────────────────────────────────────
 check_port() {

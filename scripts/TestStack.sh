@@ -2,9 +2,9 @@
 # scripts/TestStack.sh
 # Full stack integration test. Run after 'make up'. Exit 0 = all tests passed.
 #
-# Each service is published on its own host port (no edge proxy in front of
-# the stack); the operator's external nginx is the single proxy layer and is
-# documented in docs/nginx.sample.conf.
+# Each service runs with network_mode: host and listens directly on its
+# *_INTERNAL_PORT on the host. The operator's external nginx is the single
+# proxy layer and is documented in docs/nginx.sample.conf.
 set -euo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
@@ -14,16 +14,16 @@ if [ -f "$ENV_FILE" ]; then set -a; source "$ENV_FILE"; set +a; fi
 STACK_BINDMOUNTROOT="${STACK_BINDMOUNTROOT:-/mnt/data/docker/stacks}"
 HOST="${TESTSTACK_HOST:-127.0.0.1}"
 
-SERVER_API_PUBLISH_PORT="${SERVER_API_PUBLISH_PORT:-8080}"
-SERVER_CLIENT_PUBLISH_PORT="${SERVER_CLIENT_PUBLISH_PORT:-8081}"
-PAIRING_PUBLISH_PORT="${PAIRING_PUBLISH_PORT:-9978}"
-UI_PUBLISH_PORT="${UI_PUBLISH_PORT:-3000}"
+SERVER_API_PORT="${SERVER_API_INTERNAL_PORT:-${SERVER_API_PUBLISH_PORT:-8080}}"
+SERVER_CLIENT_PORT="${SERVER_CLIENT_INTERNAL_PORT:-${SERVER_CLIENT_PUBLISH_PORT:-8081}}"
+PAIRING_PORT="${PAIRING_INTERNAL_PORT:-${PAIRING_PUBLISH_PORT:-9978}}"
+UI_PORT="${UI_INTERNAL_PORT:-${UI_PUBLISH_PORT:-3000}}"
 BINARIES_BASE="${OPENRPORT_BINARIES_BASE_PATH:-/binaries}"
 UI_BASE="${OPENRPORT_UI_BASE_PATH:-/ui}"
 
-SERVER_API="http://${HOST}:${SERVER_API_PUBLISH_PORT}"
-PAIRING="http://${HOST}:${PAIRING_PUBLISH_PORT}"
-UI="http://${HOST}:${UI_PUBLISH_PORT}"
+SERVER_API="http://${HOST}:${SERVER_API_PORT}"
+PAIRING="http://${HOST}:${PAIRING_PORT}"
+UI="http://${HOST}:${UI_PORT}"
 
 API_USER="${RPORTD_API_USER:-admin}"
 API_PASS="${RPORTD_API_PASSWORD:-}"
