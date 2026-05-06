@@ -41,7 +41,7 @@ COPY --from=builder /app/.output /app/.output
 COPY Container/Ui/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-EXPOSE 3000
+EXPOSE 38103
 
 USER nuxt
 
