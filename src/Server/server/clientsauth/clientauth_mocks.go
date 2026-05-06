@@ -7,8 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/openrport/openrport/share/query"
-
 	"github.com/jmoiron/sqlx"
 
 	"github.com/patrickmn/go-cache"
@@ -25,16 +23,16 @@ func NewDatabaseMockProvider(clients []*ClientAuth, t *testing.T) *DatabaseProvi
 	if _, err := authDb.Exec(`CREATE TABLE clients_auth (id text,password text)`); err != nil {
 		log.Fatalln(err)
 	}
+	p := NewDatabaseProvider(authDb, "clients_auth")
 	for _, v := range clients {
 		if _, err := authDb.Exec("INSERT INTO clients_auth VALUES(?,?)", v.ID, v.Password); err != nil {
 			require.NoError(t, err)
 		}
+		if err := p.replaceTags(v.ID, v.Tags); err != nil {
+			require.NoError(t, err)
+		}
 	}
-	return &DatabaseProvider{
-		db:        authDb,
-		tableName: "clients_auth",
-		converter: query.NewSQLConverter(authDb.DriverName()),
-	}
+	return p
 }
 
 // NewMockFileProvider creates a clients auth file for testing and returns the FileProvider
@@ -42,11 +40,11 @@ func NewMockFileProvider(clients []*ClientAuth, t *testing.T) *FileProvider {
 	var authFile = t.TempDir() + "/client-auth.json"
 	f, _ := os.Create(authFile)
 	defer f.Close()
-	clientAuth := make(map[string]string)
+	entries := make(map[string]fileEntry, len(clients))
 	for _, v := range clients {
-		clientAuth[v.ID] = v.Password
+		entries[v.ID] = fileEntry{Password: v.Password, Tags: v.Tags}
 	}
-	cj, _ := json.Marshal(clientAuth)
+	cj, _ := json.Marshal(entries)
 	if _, err := f.Write(cj); err != nil {
 		require.NoError(t, err)
 	}

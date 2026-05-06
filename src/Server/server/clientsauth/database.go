@@ -18,17 +18,27 @@ const mysqlDuplicateEntryErrorCode = 1062
 type DatabaseProvider struct {
 	db        *sqlx.DB
 	tableName string
+	tagsTable string
 	converter *query.SQLConverter
 }
 
 var _ Provider = &DatabaseProvider{}
 
 func NewDatabaseProvider(DB *sqlx.DB, tableName string) *DatabaseProvider {
-	return &DatabaseProvider{
+	p := &DatabaseProvider{
 		db:        DB,
 		tableName: tableName,
+		tagsTable: tableName + "_tags",
 		converter: query.NewSQLConverter(DB.DriverName()),
 	}
+	// Best-effort auto-create of the side table that holds optional per-credential
+	// tags. Errors are ignored so a read-only DB user does not fail at startup;
+	// tag-aware writes will surface the underlying error to the caller.
+	_, _ = p.db.Exec(fmt.Sprintf(
+		"CREATE TABLE IF NOT EXISTS %s (client_auth_id VARCHAR(255) NOT NULL, tag VARCHAR(255) NOT NULL, PRIMARY KEY (client_auth_id, tag))",
+		p.tagsTable,
+	))
+	return p
 }
 
 func (c *DatabaseProvider) GetFiltered(filter *query.ListOptions) ([]*ClientAuth, int, error) {
@@ -43,8 +53,13 @@ func (c *DatabaseProvider) GetFiltered(filter *query.ListOptions) ([]*ClientAuth
 		return nil, 0, err
 	}
 	var result = []*ClientAuth{}
-	err := c.db.Select(&result, rQuery, rParams...)
-	return result, count, err
+	if err := c.db.Select(&result, rQuery, rParams...); err != nil {
+		return nil, 0, err
+	}
+	if err := c.attachTags(result); err != nil {
+		return nil, 0, err
+	}
+	return result, count, nil
 }
 
 func (c *DatabaseProvider) Get(id string) (*ClientAuth, error) {
@@ -53,7 +68,15 @@ func (c *DatabaseProvider) Get(id string) (*ClientAuth, error) {
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
-	return result, err
+	if err != nil {
+		return nil, err
+	}
+	tags, err := c.loadTags(id)
+	if err != nil {
+		return nil, err
+	}
+	result.Tags = tags
+	return result, nil
 }
 
 func (c *DatabaseProvider) Add(client *ClientAuth) (bool, error) {
@@ -72,12 +95,61 @@ func (c *DatabaseProvider) Add(client *ClientAuth) (bool, error) {
 		}
 		return false, err
 	}
+	if err := c.replaceTags(client.ID, client.Tags); err != nil {
+		return true, err
+	}
 	return true, nil
 }
 
 func (c *DatabaseProvider) Delete(id string) error {
+	if _, err := c.db.Exec(fmt.Sprintf("DELETE FROM %s WHERE client_auth_id = ?", c.tagsTable), id); err != nil {
+		return err
+	}
 	_, err := c.db.Exec(fmt.Sprintf("DELETE FROM %s WHERE id = ?", c.tableName), id)
 	return err
+}
+
+// loadTags returns the list of tags associated with the given client auth id,
+// sorted ascending. An empty (nil) slice is returned when no tags are present.
+func (c *DatabaseProvider) loadTags(id string) ([]string, error) {
+	var tags []string
+	err := c.db.Select(&tags, fmt.Sprintf("SELECT tag FROM %s WHERE client_auth_id = ? ORDER BY tag ASC", c.tagsTable), id)
+	if err != nil {
+		return nil, err
+	}
+	return tags, nil
+}
+
+// attachTags fills in the Tags field on each ClientAuth in the slice using a
+// single round-trip per id. Kept simple over a JOIN to keep the SQL portable
+// across the SQL driver matrix sqlx already has to deal with elsewhere.
+func (c *DatabaseProvider) attachTags(rows []*ClientAuth) error {
+	for _, r := range rows {
+		tags, err := c.loadTags(r.ID)
+		if err != nil {
+			return err
+		}
+		r.Tags = tags
+	}
+	return nil
+}
+
+// replaceTags removes any existing tags for the given id and inserts the
+// provided set. A nil/empty slice is treated as "no tags" and just clears the
+// rows.
+func (c *DatabaseProvider) replaceTags(id string, tags []string) error {
+	if _, err := c.db.Exec(fmt.Sprintf("DELETE FROM %s WHERE client_auth_id = ?", c.tagsTable), id); err != nil {
+		return err
+	}
+	for _, t := range tags {
+		if t == "" {
+			continue
+		}
+		if _, err := c.db.Exec(fmt.Sprintf("INSERT INTO %s (client_auth_id, tag) VALUES (?, ?)", c.tagsTable), id, t); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (c *DatabaseProvider) IsWriteable() bool {

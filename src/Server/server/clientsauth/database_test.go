@@ -58,4 +58,28 @@ func TestDatabaseProvider(t *testing.T) {
 	clients, _, err = p.GetFiltered(filter)
 	require.NoError(t, err)
 	assert.ElementsMatch(t, []*ClientAuth{}, clients)
+
+	// tag round-trip
+	tagged := &ClientAuth{ID: "tagged-client", Password: "tagged-password", Tags: []string{"linux", "production"}}
+	added, err = p.Add(tagged)
+	require.NoError(t, err)
+	assert.True(t, added)
+
+	got, err := p.Get(tagged.ID)
+	require.NoError(t, err)
+	assert.Equal(t, tagged.ID, got.ID)
+	assert.Equal(t, tagged.Password, got.Password)
+	assert.ElementsMatch(t, tagged.Tags, got.Tags)
+
+	listed, _, err := p.GetFiltered(filter)
+	require.NoError(t, err)
+	require.Len(t, listed, 1)
+	assert.ElementsMatch(t, tagged.Tags, listed[0].Tags)
+
+	// delete cleans up the side table
+	err = p.Delete(tagged.ID)
+	require.NoError(t, err)
+	var leftover int
+	require.NoError(t, db.Get(&leftover, "SELECT COUNT(*) FROM clients_tags WHERE client_auth_id = ?", tagged.ID))
+	assert.Equal(t, 0, leftover)
 }
