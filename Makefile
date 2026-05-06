@@ -1,4 +1,4 @@
-.PHONY: help setup subtrees update-subtrees generate-config fetch-binaries prepare build up down test lint validate-env
+.PHONY: help setup subtrees update-subtrees generate-config fetch-binaries build-agent agent-binaries prepare build up down test lint validate-env
 
 SHELL := /bin/bash
 
@@ -14,10 +14,16 @@ validate-env: ## Validate required environment variables
 generate-config: validate-env ## Generate runtime config files from .env
 	@bash scripts/GenerateConfig.sh
 
-fetch-binaries: validate-env ## Pre-fetch rport agent binaries into Binaries/Data
+fetch-binaries: validate-env ## Download rport agent binaries from upstream releases
 	@bash scripts/FetchAgentBinaries.sh
 
-prepare: validate-env generate-config fetch-binaries ## Validate env, write configs, fetch binaries
+build-agent: validate-env ## Build rport agent from src/Server for all targets
+	@bash scripts/BuildAgentBinaries.sh
+
+agent-binaries: validate-env ## Build or fetch agent binaries (per RPORT_AGENT_SOURCE)
+	@bash scripts/MaterializeAgentBinaries.sh
+
+prepare: validate-env generate-config agent-binaries ## Validate env, write configs, materialize agent binaries
 
 subtrees: ## Add all git subtrees (first time only)
 	@bash scripts/AddSubtrees.sh

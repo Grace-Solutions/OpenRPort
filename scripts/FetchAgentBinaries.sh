@@ -79,7 +79,7 @@ if [ -z "${VERSION_TAG}" ]; then
 fi
 
 MANIFEST_TMP="$(mktemp)"
-{ echo "{"; echo "  \"version\": \"${VERSION_TAG}\","; echo "  \"fetched_at\": \"$(date -u +%FT%TZ)\","; echo "  \"files\": ["; } > "$MANIFEST_TMP"
+{ echo "{"; echo "  \"version\": \"${VERSION_TAG}\","; echo "  \"fetched_at\": \"$(date -u +%FT%TZ)\","; echo "  \"source\": \"fetch\","; echo "  \"files\": ["; } > "$MANIFEST_TMP"
 
 FIRST=1
 for entry in "${ASSETS[@]}"; do
