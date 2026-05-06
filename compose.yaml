@@ -63,12 +63,18 @@ services:
     build:
       context: .
       dockerfile: Container/Ui/Dockerfile
+      args:
+        # Build-time base path – baked into asset URLs (rebuild needed to change)
+        NUXT_APP_BASE_URL: ${NUXT_APP_BASE_URL:-/ui}
+        # Build-time default API URL (overridable at runtime via NUXT_PUBLIC_API_URL)
+        NUXT_API_URL: ${NUXT_API_URL:-http://localhost:8080}
     container_name: openrport-ui
     restart: unless-stopped
     env_file:
       - .env
     environment:
-      NUXT_API_URL: ${NUXT_API_URL}
+      # NUXT_PUBLIC_API_URL overrides runtimeConfig.public.apiUrl at runtime via Nitro
+      NUXT_PUBLIC_API_URL: ${NUXT_API_URL:-http://localhost:8080}
       NUXT_APP_BASE_URL: ${NUXT_APP_BASE_URL:-/ui}
       OPENRPORT_AUTO_DISCOVER_PUBLIC_URL: ${OPENRPORT_AUTO_DISCOVER_PUBLIC_URL:-true}
     ports:

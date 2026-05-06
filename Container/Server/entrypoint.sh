@@ -68,4 +68,4 @@ cors = ["${RPORTD_CORS_ORIGINS:-*}"]
 CONF
 fi
 
-exec rportd --config "$CONFIG_LIVE" "$@"
+exec rportd -c "$CONFIG_LIVE" "$@"

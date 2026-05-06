@@ -27,10 +27,15 @@ resolve_api_url() {
   echo "http://openrport-server:${OPENRPORT_SERVER_API_PORT:-8080}"
 }
 
-export NUXT_API_URL="$(resolve_api_url)"
+RESOLVED_API_URL="$(resolve_api_url)"
+export NUXT_API_URL="${RESOLVED_API_URL}"
+# NUXT_PUBLIC_API_URL overrides runtimeConfig.public.apiUrl in the Nitro server
+# This allows the SPA to receive the correct URL even in different deployment modes
+export NUXT_PUBLIC_API_URL="${NUXT_PUBLIC_API_URL:-${RESOLVED_API_URL}}"
 export NUXT_APP_BASE_URL="${NUXT_APP_BASE_URL:-/ui}"
 
-echo "[entrypoint] NUXT_API_URL      = ${NUXT_API_URL}"
-echo "[entrypoint] NUXT_APP_BASE_URL = ${NUXT_APP_BASE_URL}"
+echo "[entrypoint] NUXT_API_URL        = ${NUXT_API_URL}"
+echo "[entrypoint] NUXT_PUBLIC_API_URL = ${NUXT_PUBLIC_API_URL}"
+echo "[entrypoint] NUXT_APP_BASE_URL   = ${NUXT_APP_BASE_URL}"
 
 exec node /app/.output/server/index.mjs "$@"
