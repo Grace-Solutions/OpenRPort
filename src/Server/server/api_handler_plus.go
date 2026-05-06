@@ -2,10 +2,14 @@ package chserver
 
 import (
 	"net/http"
+	"sort"
 
 	rportplus "github.com/openrport/openrport/plus"
+	"github.com/openrport/openrport/plus/capabilities/oauth"
 	"github.com/openrport/openrport/plus/capabilities/status"
 	"github.com/openrport/openrport/server/api"
+	"github.com/openrport/openrport/server/api/users"
+	"github.com/openrport/openrport/share/random"
 )
 
 // handleOAuthAuthorizationCode takes a request containing the OAuth authorization code parameters
@@ -41,6 +45,11 @@ func (al *APIListener) handleOAuthAuthorizationCode(w http.ResponseWriter, r *ht
 			al.jsonErrorResponse(w, http.StatusUnauthorized, err)
 			return
 		}
+	}
+
+	if err := al.syncOAuthUserGroups(r, capEx, token, username); err != nil {
+		al.jsonErrorResponse(w, http.StatusInternalServerError, err)
+		return
 	}
 
 	// pass the username to the existing login logic to create the user (if required) and
@@ -94,9 +103,75 @@ func (al *APIListener) handleGetDeviceAuth(w http.ResponseWriter, r *http.Reques
 		}
 	}
 
+	if err := al.syncOAuthUserGroups(r, capEx, token, username); err != nil {
+		al.jsonErrorResponse(w, http.StatusInternalServerError, err)
+		return
+	}
+
 	// pass the username to the existing login logic to create the user (if required) and
 	// get an rport JWT bearer token.
 	al.handleLogin(username, "", "", true /* skipPasswordValidation */, w, r)
+}
+
+// syncOAuthUserGroups inspects the OAuth capability for an optional
+// GroupCapabilityEx implementation and, when present, ensures the local
+// user record exists with the IdP-supplied groups before handleLogin runs.
+// Without this hook a user created on first OAuth login receives only
+// API.DefaultUserGroup; with it, group membership tracks the IdP on every
+// login, making OIDC group claims authoritative for rportd authorisation.
+//
+// A no-op when:
+//   - the capability does not implement GroupCapabilityEx
+//   - the provider returns an empty group set (treated as "no opinion" --
+//     existing local groups are preserved)
+func (al *APIListener) syncOAuthUserGroups(r *http.Request, capEx oauth.CapabilityEx, accessToken, username string) error {
+	groupCap, ok := capEx.(oauth.GroupCapabilityEx)
+	if !ok || username == "" {
+		return nil
+	}
+	groups, err := groupCap.GetUserGroups(r, accessToken)
+	if err != nil {
+		return err
+	}
+	if len(groups) == 0 {
+		return nil
+	}
+
+	existing, err := al.userService.GetByUsername(username)
+	if err != nil {
+		return err
+	}
+	if existing == nil {
+		pwd, err := random.UUID4()
+		if err != nil {
+			return err
+		}
+		return al.userService.Change(&users.User{
+			Username: username,
+			Password: pwd,
+			Groups:   groups,
+		}, "")
+	}
+	if sameGroups(existing.Groups, groups) {
+		return nil
+	}
+	return al.userService.Change(&users.User{Groups: groups}, username)
+}
+
+func sameGroups(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	ac := append([]string(nil), a...)
+	bc := append([]string(nil), b...)
+	sort.Strings(ac)
+	sort.Strings(bc)
+	for i := range ac {
+		if ac[i] != bc[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // handlePlusStatus makes a request to the plugin for it's status/version info

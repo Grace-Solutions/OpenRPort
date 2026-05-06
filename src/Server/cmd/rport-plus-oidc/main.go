@@ -74,7 +74,8 @@ func InitOAuthCapabilityEx(cap *oauth.Capability) oauth.CapabilityEx {
 }
 
 // oidcProvider implements oauth.CapabilityEx using OIDC discovery + the
-// standard authorization-code flow.
+// standard authorization-code flow. It also implements oauth.GroupCapabilityEx
+// so the host can mirror IdP group claims into rportd's local user store.
 type oidcProvider struct {
 	cfg *oauth.Config
 	log *logger.Logger
@@ -83,7 +84,20 @@ type oidcProvider struct {
 	verifier *oidc.IDTokenVerifier
 	oauth2   *oauth2.Config
 	provider *oidc.Provider
+
+	// groupsCache memoises group claims extracted from the ID token at
+	// exchange time so a follow-up GetUserGroups call doesn't have to hit
+	// the IdP again. Entries are short-lived (single login round-trip).
+	groupsMu    sync.Mutex
+	groupsCache map[string]groupsCacheEntry
 }
+
+type groupsCacheEntry struct {
+	groups []string
+	expiry time.Time
+}
+
+const groupsCacheTTL = 10 * time.Minute
 
 func (p *oidcProvider) ValidateConfig() error {
 	if p.cfg == nil {
@@ -125,10 +139,11 @@ func (p *oidcProvider) initOAuth(ctx context.Context) error {
 	if p.oauth2 != nil {
 		return nil
 	}
-	scopes := []string{oidc.ScopeOpenID, "profile", "email"}
-	if p.cfg.RequiredGroupID != "" || p.cfg.RoleClaim != "" {
-		scopes = append(scopes, "groups")
-	}
+	// Always request the "groups" scope so providers that gate group
+	// claims behind an explicit scope (e.g. Authentik, Okta) include them
+	// in the ID token / userinfo. IdPs that don't recognise the scope
+	// generally ignore it.
+	scopes := []string{oidc.ScopeOpenID, "profile", "email", "groups"}
 	p.oauth2 = &oauth2.Config{
 		ClientID:     p.cfg.ClientID,
 		ClientSecret: p.cfg.ClientSecret,
@@ -187,7 +202,12 @@ func (p *oidcProvider) PerformAuthCodeExchange(r *http.Request) (string, string,
 	if rawID, ok := tok.Extra("id_token").(string); ok && rawID != "" && p.verifier != nil {
 		idTok, verr := p.verifier.Verify(r.Context(), rawID)
 		if verr == nil {
-			username = p.extractUsername(idTok)
+			claims := map[string]interface{}{}
+			_ = idTok.Claims(&claims)
+			username = p.extractUsernameFromClaims(claims, idTok.Subject)
+			if groups := p.extractGroupsFromClaims(claims); len(groups) > 0 {
+				p.cacheGroups(tok.AccessToken, groups)
+			}
 		}
 	}
 	return tok.AccessToken, username, nil
@@ -216,6 +236,9 @@ func (p *oidcProvider) GetPermittedUser(r *http.Request, accessToken string) (st
 	if !p.userPermitted(username) {
 		return "", fmt.Errorf("user %q not permitted", username)
 	}
+	if groups := p.extractGroupsFromClaims(claims); len(groups) > 0 {
+		p.cacheGroups(accessToken, groups)
+	}
 	return username, nil
 }
 
@@ -242,18 +265,143 @@ func (p *oidcProvider) usernameClaimName() string {
 	return "preferred_username"
 }
 
-func (p *oidcProvider) extractUsername(t *oidc.IDToken) string {
-	claims := map[string]interface{}{}
-	if err := t.Claims(&claims); err != nil {
-		return ""
-	}
+func (p *oidcProvider) extractUsernameFromClaims(claims map[string]interface{}, subject string) string {
 	if v, ok := claims[p.usernameClaimName()].(string); ok && v != "" {
 		return v
 	}
 	if v, ok := claims["email"].(string); ok && v != "" {
 		return v
 	}
-	return t.Subject
+	return subject
+}
+
+// groupsClaimName returns the configured claim used for group membership.
+// Falls back to the OIDC convention "groups" when unset.
+func (p *oidcProvider) groupsClaimName() string {
+	if p.cfg != nil && p.cfg.RoleClaim != "" {
+		return p.cfg.RoleClaim
+	}
+	return "groups"
+}
+
+// extractGroupsFromClaims handles the common shapes used by IdPs:
+//   - []string                            (Authentik, Keycloak when "groups" mapper is set)
+//   - []interface{} of strings            (generic JSON decoding)
+//   - []interface{} of objects with "name" field (Auth0 role objects)
+//   - comma- or space-separated string    (some custom mappers)
+func (p *oidcProvider) extractGroupsFromClaims(claims map[string]interface{}) []string {
+	raw, ok := claims[p.groupsClaimName()]
+	if !ok {
+		return nil
+	}
+	switch v := raw.(type) {
+	case []string:
+		return dedupeNonEmpty(v)
+	case []interface{}:
+		out := make([]string, 0, len(v))
+		for _, item := range v {
+			switch s := item.(type) {
+			case string:
+				out = append(out, s)
+			case map[string]interface{}:
+				if name, ok := s["name"].(string); ok && name != "" {
+					out = append(out, name)
+				}
+			}
+		}
+		return dedupeNonEmpty(out)
+	case string:
+		sep := ","
+		if !strings.Contains(v, ",") && strings.Contains(v, " ") {
+			sep = " "
+		}
+		parts := strings.Split(v, sep)
+		for i := range parts {
+			parts[i] = strings.TrimSpace(parts[i])
+		}
+		return dedupeNonEmpty(parts)
+	}
+	return nil
+}
+
+func dedupeNonEmpty(in []string) []string {
+	seen := map[string]struct{}{}
+	out := make([]string, 0, len(in))
+	for _, s := range in {
+		if s == "" {
+			continue
+		}
+		if _, dup := seen[s]; dup {
+			continue
+		}
+		seen[s] = struct{}{}
+		out = append(out, s)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func (p *oidcProvider) cacheGroups(accessToken string, groups []string) {
+	if accessToken == "" || len(groups) == 0 {
+		return
+	}
+	p.groupsMu.Lock()
+	defer p.groupsMu.Unlock()
+	if p.groupsCache == nil {
+		p.groupsCache = map[string]groupsCacheEntry{}
+	}
+	now := time.Now()
+	for k, e := range p.groupsCache {
+		if now.After(e.expiry) {
+			delete(p.groupsCache, k)
+		}
+	}
+	p.groupsCache[accessToken] = groupsCacheEntry{groups: groups, expiry: now.Add(groupsCacheTTL)}
+}
+
+func (p *oidcProvider) takeCachedGroups(accessToken string) []string {
+	if accessToken == "" {
+		return nil
+	}
+	p.groupsMu.Lock()
+	defer p.groupsMu.Unlock()
+	entry, ok := p.groupsCache[accessToken]
+	if !ok {
+		return nil
+	}
+	delete(p.groupsCache, accessToken)
+	if time.Now().After(entry.expiry) {
+		return nil
+	}
+	return entry.groups
+}
+
+// GetUserGroups implements oauth.GroupCapabilityEx. It returns the IdP-asserted
+// group membership for the user identified by the supplied access token,
+// preferring claims captured during the prior code exchange and falling back
+// to the userinfo endpoint when no cached entry is present.
+func (p *oidcProvider) GetUserGroups(r *http.Request, accessToken string) ([]string, error) {
+	if groups := p.takeCachedGroups(accessToken); len(groups) > 0 {
+		return groups, nil
+	}
+	if err := p.initOAuth(r.Context()); err != nil {
+		return nil, err
+	}
+	if p.provider == nil {
+		return nil, nil
+	}
+	src := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: accessToken})
+	ui, err := p.provider.UserInfo(r.Context(), src)
+	if err != nil {
+		return nil, fmt.Errorf("userinfo failed: %w", err)
+	}
+	claims := map[string]interface{}{}
+	if err := ui.Claims(&claims); err != nil {
+		return nil, fmt.Errorf("decode userinfo: %w", err)
+	}
+	return p.extractGroupsFromClaims(claims), nil
 }
 
 func (p *oidcProvider) userPermitted(username string) bool {

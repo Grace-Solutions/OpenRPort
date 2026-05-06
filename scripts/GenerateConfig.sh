@@ -86,12 +86,52 @@ EOF
 # Activated only when RPORT_OIDC_ISSUER_URL is set. The plugin .so is built
 # into the Server image at /usr/local/lib/rport/rport-plus.so; override with
 # RPORT_PLUS_PLUGIN_PATH when bind-mounting an external build.
+#
+# Endpoint resolution:
+#   1. Explicit RPORT_OIDC_AUTHORIZE_URL/TOKEN_URL/JWKS_URL win.
+#   2. Otherwise we attempt OIDC discovery: RPORT_OIDC_ISSUER_URL is treated
+#      as either the issuer (we append /.well-known/openid-configuration) or
+#      as the discovery URL itself if it already ends in /.well-known/...
+#      The discovery doc is fetched with curl+jq.
+#   3. If discovery fails, we abort with a clear error so the operator can
+#      either fix network access or supply explicit *_URL overrides.
 if [ -n "${RPORT_OIDC_ISSUER_URL:-}" ]; then
   PLUGIN_PATH="${RPORT_PLUS_PLUGIN_PATH:-/usr/local/lib/rport/rport-plus.so}"
   OIDC_REDIRECT="${RPORT_OIDC_REDIRECT_URI:-${SERVER_URL}/oauth/callback}"
-  OIDC_AUTHZ="${RPORT_OIDC_AUTHORIZE_URL:-${RPORT_OIDC_ISSUER_URL%/}/protocol/openid-connect/auth}"
-  OIDC_TOKEN="${RPORT_OIDC_TOKEN_URL:-${RPORT_OIDC_ISSUER_URL%/}/protocol/openid-connect/token}"
-  OIDC_JWKS="${RPORT_OIDC_JWKS_URL:-${RPORT_OIDC_ISSUER_URL%/}/protocol/openid-connect/certs}"
+
+  _ISSUER_RAW="${RPORT_OIDC_ISSUER_URL%/}"
+  case "$_ISSUER_RAW" in
+    */.well-known/openid-configuration)
+      _DISCOVERY_URL="$_ISSUER_RAW"
+      _ISSUER_BASE="${_ISSUER_RAW%/.well-known/openid-configuration}"
+      ;;
+    *)
+      _ISSUER_BASE="$_ISSUER_RAW"
+      _DISCOVERY_URL="${_ISSUER_BASE}/.well-known/openid-configuration"
+      ;;
+  esac
+
+  OIDC_AUTHZ="${RPORT_OIDC_AUTHORIZE_URL:-}"
+  OIDC_TOKEN="${RPORT_OIDC_TOKEN_URL:-}"
+  OIDC_JWKS="${RPORT_OIDC_JWKS_URL:-}"
+
+  if [ -z "$OIDC_AUTHZ" ] || [ -z "$OIDC_TOKEN" ] || [ -z "$OIDC_JWKS" ]; then
+    if ! command -v jq >/dev/null 2>&1; then
+      echo "    [ERROR] jq is required for OIDC discovery; install jq or set RPORT_OIDC_AUTHORIZE_URL/_TOKEN_URL/_JWKS_URL explicitly" >&2
+      exit 1
+    fi
+    echo "    Discovering OIDC endpoints from ${_DISCOVERY_URL}"
+    _DISCO_DOC=$(curl -fsS --max-time 10 "$_DISCOVERY_URL" 2>/dev/null) || {
+      echo "    [ERROR] OIDC discovery failed (curl ${_DISCOVERY_URL}); set RPORT_OIDC_AUTHORIZE_URL/_TOKEN_URL/_JWKS_URL to bypass" >&2
+      exit 1
+    }
+    OIDC_AUTHZ="${OIDC_AUTHZ:-$(printf '%s' "$_DISCO_DOC" | jq -er '.authorization_endpoint')}" || {
+      echo "    [ERROR] OIDC discovery doc missing authorization_endpoint" >&2; exit 1; }
+    OIDC_TOKEN="${OIDC_TOKEN:-$(printf '%s' "$_DISCO_DOC" | jq -er '.token_endpoint')}" || {
+      echo "    [ERROR] OIDC discovery doc missing token_endpoint" >&2; exit 1; }
+    OIDC_JWKS="${OIDC_JWKS:-$(printf '%s' "$_DISCO_DOC" | jq -er '.jwks_uri')}" || {
+      echo "    [ERROR] OIDC discovery doc missing jwks_uri" >&2; exit 1; }
+  fi
   cat >> "$RPORTD_CONF" <<EOF
 
 [plus-plugin]
@@ -108,7 +148,10 @@ jwks_url             = "${OIDC_JWKS}"
 username_claim       = "${RPORT_OIDC_USERNAME_CLAIM:-preferred_username}"
 permitted_user_match = "${RPORT_OIDC_PERMITTED_USER_MATCH:-.*}"
 EOF
-  echo "    Wrote: Server/Config/rportd.conf (with [plus-oauth] -> ${RPORT_OIDC_ISSUER_URL})"
+  echo "    Wrote: Server/Config/rportd.conf (with [plus-oauth] -> ${_ISSUER_BASE})"
+  echo "      authorize_url = ${OIDC_AUTHZ}"
+  echo "      token_url     = ${OIDC_TOKEN}"
+  echo "      jwks_url      = ${OIDC_JWKS}"
 else
   echo "    Wrote: Server/Config/rportd.conf"
 fi

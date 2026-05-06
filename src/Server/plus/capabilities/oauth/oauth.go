@@ -94,6 +94,15 @@ type CapabilityEx interface {
 	GetPermittedUserForDevice(r *http.Request, accessToken string) (username string, err error)
 }
 
+// GroupCapabilityEx is an optional extension of CapabilityEx. Providers that
+// can extract group claims from the IdP token implement this so the host can
+// populate users.User.Groups when creating or updating a user via OAuth login.
+// Providers that do not implement this interface fall back to the configured
+// API.DefaultUserGroup, preserving existing behaviour.
+type GroupCapabilityEx interface {
+	GetUserGroups(r *http.Request, accessToken string) (groups []string, err error)
+}
+
 // Config is the OAuth capability config, as loaded from the rportd config file
 type Config struct {
 	Provider             string `mapstructure:"provider"`
