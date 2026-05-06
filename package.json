@@ -1,0 +1,77 @@
+{
+  "name": "openrport-frontend",
+  "version": "0.9.14",
+  "private": true,
+  "description": "OpenRPort ui is the managing front-end for the backend RMM OpenRPort",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/openrport/openrport-ui"
+  },
+  "keywords": [
+    "openrport",
+    "rmm",
+    "remote-monitoring-management",
+    "rport",
+    "rport-opensource"
+  ],
+  "author": "OpenRPort",
+  "license": "AGPL-3.0",
+  "homepage": "https://github.com/openrport/openrport-ui",
+  "bugs": {
+    "url": "https://github.com/openrport/openrport-ui/issues"
+  },
+  "type": "module",
+  "scripts": {
+    "build": "nuxt build",
+    "dev": "nuxt dev",
+    "generate": "nuxt generate",
+    "preview": "nuxt preview",
+    "postinstall": "nuxt prepare",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
+  },
+  "devDependencies": {
+    "@iconify-json/mdi": "^1.1.67",
+    "@nuxt/devtools": "^1.6.0",
+    "@nuxt/eslint": "^0.5.7",
+    "@nuxt/icon": "^1.3.1",
+    "@nuxtjs/tailwindcss": "^6.12.0",
+    "@types/node": "^22.13.13",
+    "@vueuse/nuxt": "12.5.0",
+    "eslint": "^9.11.0",
+    "nuxt": "^3.12.4",
+    "nuxt-headlessui": "^1.1.5",
+    "nuxt-snackbar": "^1.0.4",
+    "shadcn-nuxt": "^0.10.0",
+    "typescript": "^5.4.2",
+    "vue": "^3.4.19",
+    "vue-router": "^4.2.5"
+  },
+  "dependencies": {
+    "@pinia/nuxt": "^0.5.1",
+    "@radix-icons/vue": "^1.0.0",
+    "@tabler/core": "^1.0.0-beta20",
+    "@tabler/icons-vue": "^2.47.0",
+    "@tinymce/tinymce-vue": "^5.1.1",
+    "@vueform/multiselect": "^2.6.7",
+    "@vueuse/core": "^10.11.0",
+    "axios": "^1.6.7",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "codemirror": "^6.0.1",
+    "lucide-vue-next": "^0.483.0",
+    "pinia": "^2.1.7",
+    "prismjs": "^1.29.0",
+    "radix-vue": "^1.8.5",
+    "reka-ui": "^2.1.1",
+    "sass": "^1.69.5",
+    "tailwind-merge": "^3.0.2",
+    "tailwindcss-animate": "^1.0.7",
+    "vue-codemirror": "^6.1.1",
+    "vue-prism-editor": "^2.0.0-alpha.2"
+  },
+  "resolutions": {
+    "string-width": "4.2.3"
+  },
+  "packageManager": "yarn@1.22.22+sha1.ac34549e6aa8e7ead463a7407e1c7390f61a6610"
+}
