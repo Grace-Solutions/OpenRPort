@@ -1,5 +1,5 @@
 #=============================================================================
-# OPENRPORT - Unified stack (Server + Pairing + UI + Binaries)
+# OPENRPORT - Unified stack (Server + Pairing + UI)
 # https://github.com/openrport/openrport
 #=============================================================================
 #
@@ -18,8 +18,9 @@
 #   - SERVER_CLIENT_PUBLISH_PORT (8081) -> rportd chisel WS (agent connect)
 #   - SERVER_API_PUBLISH_PORT    (8080) -> rportd HTTP API   (/api/v1/*)
 #   - PAIRING_PUBLISH_PORT       (9978) -> rport-pairing
+#                                          + static agent binaries at
+#                                          ${OPENRPORT_BINARIES_BASE_PATH}/*
 #   - UI_PUBLISH_PORT            (3000) -> Nuxt UI
-#   - BINARIES_PUBLISH_PORT      (8800) -> static agent binaries
 #
 # Bind address for all published ports is ${OPENRPORT_BIND_ADDRESS:-0.0.0.0}
 # so an edge proxy on a different node can reach this host directly.
@@ -108,6 +109,8 @@ services:
       OPENRPORT_PAIRING_PUBLIC_URL: '${OPENRPORT_PAIRING_PUBLIC_URL:-}'
       OPENRPORT_PAIRING_BASE_PATH: '${OPENRPORT_PAIRING_BASE_PATH:-/pairing}'
       PAIRING_INTERNAL_PORT: '${PAIRING_INTERNAL_PORT:-9978}'
+      RPORT_PAIRING_BINARIES_DIR: '/usr/share/rport-pairing/binaries'
+      RPORT_PAIRING_BINARIES_PATH: '${OPENRPORT_BINARIES_BASE_PATH:-/binaries}'
     networks:
       INTERNAL:
       EXTERNAL:
@@ -116,6 +119,7 @@ services:
       - /etc/localtime:/etc/localtime:ro
       - "${STACK_BINDMOUNTROOT:-/mnt/data/docker/stacks}/OpenRPort/Pairing/Config:/etc/rport-pairing:rw"
       - "${STACK_BINDMOUNTROOT:-/mnt/data/docker/stacks}/OpenRPort/Pairing/Logs:/var/log/rport-pairing:rw"
+      - "${STACK_BINDMOUNTROOT:-/mnt/data/docker/stacks}/OpenRPort/Binaries/Data:/usr/share/rport-pairing/binaries:ro"
     ports:
       - "${OPENRPORT_BIND_ADDRESS:-0.0.0.0}:${PAIRING_PUBLISH_PORT:-9978}:${PAIRING_INTERNAL_PORT:-9978}"
     healthcheck:
@@ -165,41 +169,3 @@ services:
       driver: 'local'
     labels:
       com.centurylinklabs.watchtower.enable: '${UI_ENABLEAUTOMATICUPDATES:-false}'
-
-  Binaries:
-    build:
-      context: .
-      dockerfile: Container/Binaries/Dockerfile
-      args:
-        NGINX_IMAGE: '${NGINX_IMAGE:-nginx}'
-        NGINX_VERSION: '${NGINX_VERSION:-1.27-alpine}'
-    image: 'openrport/binaries:local'
-    container_name: 'OPENRPORT-BINARIES-00001'
-    restart: unless-stopped
-    stop_signal: SIGTERM
-    stop_grace_period: 10s
-    env_file:
-      - .env
-    environment:
-      OPENRPORT_BINARIES_BASE_PATH: '${OPENRPORT_BINARIES_BASE_PATH:-/binaries}'
-      BINARIES_INTERNAL_PORT: '${BINARIES_INTERNAL_PORT:-8080}'
-    networks:
-      INTERNAL:
-      EXTERNAL:
-    volumes:
-      - /etc/timezone:/etc/timezone:ro
-      - /etc/localtime:/etc/localtime:ro
-      - "${STACK_BINDMOUNTROOT:-/mnt/data/docker/stacks}/OpenRPort/Binaries/Data:/usr/share/nginx/binaries:ro"
-      - "${STACK_BINDMOUNTROOT:-/mnt/data/docker/stacks}/OpenRPort/Binaries/Logs:/var/log/nginx:rw"
-    ports:
-      - "${OPENRPORT_BIND_ADDRESS:-0.0.0.0}:${BINARIES_PUBLISH_PORT:-8800}:${BINARIES_INTERNAL_PORT:-8080}"
-    healthcheck:
-      test: ["CMD-SHELL", "wget --tries=1 --timeout=5 -qO- http://localhost:${BINARIES_INTERNAL_PORT:-8080}/healthz >/dev/null 2>&1 || exit 1"]
-      start_period: 15s
-      interval: 30s
-      retries: 5
-      timeout: 5s
-    logging:
-      driver: 'local'
-    labels:
-      com.centurylinklabs.watchtower.enable: '${BINARIES_ENABLEAUTOMATICUPDATES:-false}'

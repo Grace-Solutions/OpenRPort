@@ -18,14 +18,12 @@ SERVER_API_PUBLISH_PORT="${SERVER_API_PUBLISH_PORT:-8080}"
 SERVER_CLIENT_PUBLISH_PORT="${SERVER_CLIENT_PUBLISH_PORT:-8081}"
 PAIRING_PUBLISH_PORT="${PAIRING_PUBLISH_PORT:-9978}"
 UI_PUBLISH_PORT="${UI_PUBLISH_PORT:-3000}"
-BINARIES_PUBLISH_PORT="${BINARIES_PUBLISH_PORT:-8800}"
 BINARIES_BASE="${OPENRPORT_BINARIES_BASE_PATH:-/binaries}"
 UI_BASE="${OPENRPORT_UI_BASE_PATH:-/ui}"
 
 SERVER_API="http://${HOST}:${SERVER_API_PUBLISH_PORT}"
 PAIRING="http://${HOST}:${PAIRING_PUBLISH_PORT}"
 UI="http://${HOST}:${UI_PUBLISH_PORT}"
-BINARIES="http://${HOST}:${BINARIES_PUBLISH_PORT}"
 
 API_USER="${RPORTD_API_USER:-admin}"
 API_PASS="${RPORTD_API_PASSWORD:-}"
@@ -53,7 +51,7 @@ echo ""
 
 # 1. Container health
 echo "--- Container Status ---"
-for c in OPENRPORT-SERVER-00001 OPENRPORT-PAIRING-00001 OPENRPORT-UI-00001 OPENRPORT-BINARIES-00001; do
+for c in OPENRPORT-SERVER-00001 OPENRPORT-PAIRING-00001 OPENRPORT-UI-00001; do
   if docker ps --filter "name=^${c}$" --filter "status=running" --format '{{.Names}}' | grep -qx "${c}"; then
     pass "$c is running"
   else
@@ -68,8 +66,7 @@ http_ok "Server API"        "${SERVER_API}/api/v1/status"           "200,401"
 http_ok "Pairing /update"   "${PAIRING}/update"                     "200"
 http_ok "UI root"           "${UI}/"                                "200,301,302"
 http_ok "UI base path"      "${UI}${UI_BASE}/"                      "200"
-http_ok "Binaries healthz"  "${BINARIES}/healthz"                   "200"
-http_ok "Binaries manifest" "${BINARIES}${BINARIES_BASE}/manifest.json" "200"
+http_ok "Binaries manifest" "${PAIRING}${BINARIES_BASE}/manifest.json" "200"
 
 # 3. API authenticated status
 echo ""

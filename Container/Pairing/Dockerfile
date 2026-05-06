@@ -29,8 +29,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 RUN groupadd -r rport-pairing && \
     useradd -r -g rport-pairing rport-pairing && \
-    mkdir -p /etc/rport-pairing && \
-    chown -R rport-pairing:rport-pairing /etc/rport-pairing
+    mkdir -p /etc/rport-pairing /usr/share/rport-pairing/binaries && \
+    chown -R rport-pairing:rport-pairing /etc/rport-pairing /usr/share/rport-pairing
 
 COPY --from=builder /out/rport-pairing /usr/local/bin/rport-pairing
 

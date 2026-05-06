@@ -33,14 +33,13 @@ SERVER_API_PUBLISH_PORT="${SERVER_API_PUBLISH_PORT:-8080}"
 SERVER_CLIENT_PUBLISH_PORT="${SERVER_CLIENT_PUBLISH_PORT:-8081}"
 PAIRING_PUBLISH_PORT="${PAIRING_PUBLISH_PORT:-9978}"
 UI_PUBLISH_PORT="${UI_PUBLISH_PORT:-3000}"
-BINARIES_PUBLISH_PORT="${BINARIES_PUBLISH_PORT:-8800}"
 
-# In local mode each service is fronted on its own host port (no edge proxy
-# routing /api, /pairing, /ui, /binaries to a single port).
+# In local mode each service is fronted on its own host port. Pairing also
+# serves the static binaries under ${BINARIES_BASE} on the same port.
 SERVER_URL="${OPENRPORT_SERVER_PUBLIC_URL:-http://localhost:${SERVER_CLIENT_PUBLISH_PORT}}"
 PAIRING_URL="${OPENRPORT_PAIRING_PUBLIC_URL:-http://localhost:${PAIRING_PUBLISH_PORT}}"
 UI_URL="${OPENRPORT_UI_PUBLIC_URL:-http://localhost:${UI_PUBLISH_PORT}}"
-BINARIES_URL="${OPENRPORT_BINARIES_PUBLIC_URL:-http://localhost:${BINARIES_PUBLISH_PORT}${BINARIES_BASE}}"
+BINARIES_URL="${OPENRPORT_BINARIES_PUBLIC_URL:-http://localhost:${PAIRING_PUBLISH_PORT}${BINARIES_BASE}}"
 
 echo ""
 echo "==> Generating runtime config under ${ROOT}"
@@ -55,7 +54,7 @@ mkdir -p \
   "${ROOT}/Server/Config"   "${ROOT}/Server/Data"   "${ROOT}/Server/Logs"   \
   "${ROOT}/Pairing/Config"  "${ROOT}/Pairing/Logs"                          \
   "${ROOT}/UI"              "${ROOT}/UI/Logs"                               \
-  "${ROOT}/Binaries/Data"   "${ROOT}/Binaries/Logs"
+  "${ROOT}/Binaries/Data"
 
 # ── rportd.conf ────────────────────────────────────────────────────────────
 RPORTD_CONF="${ROOT}/Server/Config/rportd.conf"

@@ -89,8 +89,6 @@ check_port "PAIRING_INTERNAL_PORT"       "${PAIRING_INTERNAL_PORT:-9978}"
 check_port "PAIRING_PUBLISH_PORT"        "${PAIRING_PUBLISH_PORT:-9978}"
 check_port "UI_INTERNAL_PORT"            "${UI_INTERNAL_PORT:-3000}"
 check_port "UI_PUBLISH_PORT"             "${UI_PUBLISH_PORT:-3000}"
-check_port "BINARIES_INTERNAL_PORT"      "${BINARIES_INTERNAL_PORT:-8080}"
-check_port "BINARIES_PUBLISH_PORT"       "${BINARIES_PUBLISH_PORT:-8800}"
 
 # ── Subpath: hosts must match ───────────────────────────────────────────────
 if [[ "$MODE" == "subpath" ]]; then
