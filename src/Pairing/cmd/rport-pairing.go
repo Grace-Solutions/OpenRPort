@@ -38,9 +38,11 @@ func main() {
 	installerHandler := &retrieve.InstallerHandler{
 		StaticDeposit: config.StaticDeposit,
 		Cache:         c,
+		Downloads:     config.Downloads,
 	}
 	updateHandler := &retrieve.UpdateHandler{
 		StaticDeposit: config.StaticDeposit,
+		Downloads:     config.Downloads,
 	}
 	corsHandler := &cors.Handler{}
 

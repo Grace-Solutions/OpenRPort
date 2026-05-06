@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"github.com/openrport/rport-pairing/deposit"
+	"github.com/openrport/rport-pairing/retrieve"
 	"github.com/spf13/viper"
 	"log"
 )
@@ -12,7 +13,8 @@ type Config struct {
 		Address string `mapstructure:"address"`
 		Url     string `mapstructure:"url"`
 	} `mapstructure:"server"`
-	StaticDeposit deposit.Deposit `mapstructure:"static-deposit"`
+	StaticDeposit deposit.Deposit    `mapstructure:"static-deposit"`
+	Downloads     retrieve.Downloads `mapstructure:"downloads"`
 }
 
 func New(confFile string) *Config {

@@ -6,11 +6,12 @@ import (
 )
 
 type Deposit struct {
-	Code        string `mapstructure:"code"`
-	ConnectUrl  string `validate:"required,url" json:"connect_url" mapstructure:"connect_url"`
-	Fingerprint string `validate:"required,len=47" json:"fingerprint" mapstructure:"fingerprint"`
-	ClientId    string `validate:"required" json:"client_id" mapstructure:"client_id"`
-	Password    string `validate:"required" json:"password" mapstructure:"password"`
+	Code        string   `mapstructure:"code"`
+	ConnectUrl  string   `validate:"required,url" json:"connect_url" mapstructure:"connect_url"`
+	Fingerprint string   `validate:"required,len=47" json:"fingerprint" mapstructure:"fingerprint"`
+	ClientId    string   `validate:"required" json:"client_id" mapstructure:"client_id"`
+	Password    string   `validate:"required" json:"password" mapstructure:"password"`
+	Tags        []string `json:"tags,omitempty" mapstructure:"tags"`
 }
 
 type Response struct {
@@ -34,12 +35,17 @@ func rplForBash(in string) (out string) {
 	return in
 }
 func SanitizeForBash(in Deposit) (out Deposit) {
+	tags := make([]string, len(in.Tags))
+	for i, t := range in.Tags {
+		tags[i] = rplForBash(t)
+	}
 	return Deposit{
 		Code:        rplForBash(in.Code),
 		ConnectUrl:  rplForBash(in.ConnectUrl),
 		Fingerprint: rplForBash(in.Fingerprint),
 		ClientId:    rplForBash(in.ClientId),
 		Password:    rplForBash(in.Password),
+		Tags:        tags,
 	}
 }
 
@@ -55,11 +61,16 @@ func rplForPowerShell(in string) (out string) {
 	return in
 }
 func SanitizeForPowerShell(in Deposit) (out Deposit) {
+	tags := make([]string, len(in.Tags))
+	for i, t := range in.Tags {
+		tags[i] = rplForPowerShell(t)
+	}
 	return Deposit{
 		Code:        rplForPowerShell(in.Code),
 		ConnectUrl:  rplForPowerShell(in.ConnectUrl),
 		Fingerprint: rplForPowerShell(in.Fingerprint),
 		ClientId:    rplForPowerShell(in.ClientId),
 		Password:    rplForPowerShell(in.Password),
+		Tags:        tags,
 	}
 }

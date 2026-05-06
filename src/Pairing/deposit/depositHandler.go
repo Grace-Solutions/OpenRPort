@@ -16,6 +16,21 @@ import (
 
 var validate *validator.Validate
 
+// splitTagValues normalises a list of raw tag strings: each input may itself
+// be comma-separated. Whitespace is trimmed and empty results are dropped.
+func splitTagValues(raw []string) []string {
+	var out []string
+	for _, item := range raw {
+		for _, part := range strings.Split(item, ",") {
+			t := strings.TrimSpace(part)
+			if t != "" {
+				out = append(out, t)
+			}
+		}
+	}
+	return out
+}
+
 const alphabet = "abcdefghijklmnpqrstuvwyxzABCDEFGHIJKLMNPQRSTUVWXYZ123456789" // Chars used to generate the code
 const ttl = 300 * time.Second                                                  // Cache items aka pairing code lifetime
 const formMaxMem = 256                                                         // Maximum memory bytes used to load form contents for parsing
@@ -44,6 +59,14 @@ func (dh *Handler) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 		deposit.ConnectUrl = r.FormValue("connect_url")
 		deposit.Fingerprint = r.FormValue("fingerprint")
 		deposit.Password = r.FormValue("password")
+		// Tags accepted as repeated form values (?tags=foo&tags=bar) or as a
+		// single comma-separated string (tags=foo,bar). Empty entries are
+		// dropped so downstream rendering never emits a bare "" tag.
+		if tagsList, ok := r.MultipartForm.Value["tags"]; ok && len(tagsList) > 0 {
+			deposit.Tags = splitTagValues(tagsList)
+		} else if csv := r.FormValue("tags"); csv != "" {
+			deposit.Tags = splitTagValues([]string{csv})
+		}
 	}
 	_, err := validateInput(deposit)
 	if err != nil {
