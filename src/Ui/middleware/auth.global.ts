@@ -11,10 +11,12 @@ export default defineNuxtRouteMiddleware((to, from) => {
 		authenticated.value = true;
 	}
 
+	const isAuthRoute = to?.name === 'auth' || to?.name === 'auth-callback';
+
 	if (token.value && to?.name === 'auth') {
 		return navigateTo('/');
 	}
-	if (!token.value && to?.name !== 'auth') {
+	if (!token.value && !isAuthRoute) {
 		abortNavigation();
 		return navigateTo('/auth');
 	}

@@ -81,6 +81,7 @@ export default defineNuxtConfig({
 		public: {
 			appEnv: process.env.NUXT_APP_ENV,
 			apiUrl: process.env.NUXT_API_URL,
+			authMode: process.env.NUXT_PUBLIC_AUTH_MODE || 'both',
 		},
 	},
 

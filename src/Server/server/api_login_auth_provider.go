@@ -18,6 +18,12 @@ type AuthProviderInfo struct {
 	SettingsURI       string `json:"settings_uri"`
 	DeviceSettingsURI string `json:"device_settings_uri"`
 	MaxTokenLifetime  int    `json:"max_token_lifetime"`
+	// LocalLoginAvailable advertises whether the built-in username/password
+	// login endpoints remain reachable. Always true when no OAuth provider
+	// is configured; reflects PlusConfig.OAuthConfig.AllowLocalLogin
+	// otherwise. Lets the UI decide whether to render the basic-auth form
+	// alongside the OAuth button.
+	LocalLoginAvailable bool `json:"local_login_available"`
 }
 
 // AuthSettings contains the auth info to be used by a regular web app
@@ -41,17 +47,19 @@ func (al *APIListener) handleGetAuthProvider(w http.ResponseWriter, req *http.Re
 
 	if rportplus.IsPlusOAuthEnabled(al.config.PlusConfig) {
 		OAuthProvider := AuthProviderInfo{
-			AuthProvider:      al.config.PlusConfig.OAuthConfig.Provider,
-			SettingsURI:       routes.AllRoutesPrefix + routes.AuthRoutesPrefix + routes.AuthSettingsRoute,
-			DeviceSettingsURI: routes.AllRoutesPrefix + routes.AuthRoutesPrefix + routes.AuthDeviceSettingsRoute,
-			MaxTokenLifetime:  maxTokenLifetime,
+			AuthProvider:        al.config.PlusConfig.OAuthConfig.Provider,
+			SettingsURI:         routes.AllRoutesPrefix + routes.AuthRoutesPrefix + routes.AuthSettingsRoute,
+			DeviceSettingsURI:   routes.AllRoutesPrefix + routes.AuthRoutesPrefix + routes.AuthDeviceSettingsRoute,
+			MaxTokenLifetime:    maxTokenLifetime,
+			LocalLoginAvailable: rportplus.IsLocalLoginAllowed(al.config.PlusConfig),
 		}
 		response = api.NewSuccessPayload(OAuthProvider)
 	} else {
 		builtInAuthProvider := AuthProviderInfo{
-			AuthProvider:     BuiltInAuthProviderName,
-			SettingsURI:      "",
-			MaxTokenLifetime: maxTokenLifetime,
+			AuthProvider:        BuiltInAuthProviderName,
+			SettingsURI:         "",
+			MaxTokenLifetime:    maxTokenLifetime,
+			LocalLoginAvailable: true,
 		}
 		response = api.NewSuccessPayload(builtInAuthProvider)
 	}

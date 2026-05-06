@@ -19,3 +19,13 @@ func IsOAuthPermittedUserList(config PlusConfig) bool {
 	}
 	return config.OAuthConfig != nil && config.OAuthConfig.PermittedUserList
 }
+
+// IsLocalLoginAllowed reports whether the built-in username/password login
+// endpoints should remain reachable while OAuth is configured. Used to keep a
+// local break-glass admin path available when an external IdP is unreachable.
+func IsLocalLoginAllowed(config PlusConfig) bool {
+	if !IsPlusOAuthEnabled(config) {
+		return true
+	}
+	return config.OAuthConfig.AllowLocalLogin
+}

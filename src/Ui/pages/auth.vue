@@ -1,7 +1,10 @@
 <template>
 	<LoginForm
 		v-if="!showTwoFa"
+		:provider="provider"
+		:auth-mode="authMode"
 		@login="handleLogin"
+		@oidc="handleOidc"
 	/>
 	<TwoFa
 		v-if="showTwoFa"
@@ -11,13 +14,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { onMounted, ref } from 'vue';
 import LoginForm from '../components/LoginForm.vue';
-import type { ILoginInput } from '~/types';
+import type { AuthMode, ILoginInput } from '~/types';
 
 const store = useTokenStore();
-const { authenticated, showTwoFa } = storeToRefs(store);
+const { authenticated, showTwoFa, provider } = storeToRefs(store);
 const router = useRouter();
+const config = useRuntimeConfig();
+const authMode = ((config.public.authMode as AuthMode | undefined) || 'both');
 const credentialsRef = ref<ILoginInput>({
 	username: '',
 	password: '',
@@ -31,18 +36,26 @@ useHead({
 	title: 'Login',
 });
 
+onMounted(async () => {
+	await store.getProvider();
+});
+
 const handleLogin = async (credentials: ILoginInput) => {
 	credentialsRef.value = credentials;
 	await store.getLoginToken(credentials);
-	if (authenticated) {
+	if (authenticated.value) {
 		await router.push('/');
 	}
 };
 
 const handleTwoFa = async (two_fa: string) => {
 	await store.verifyTwoFa(credentialsRef.value, two_fa);
-	if (authenticated) {
+	if (authenticated.value) {
 		await router.push('/');
 	}
+};
+
+const handleOidc = async () => {
+	await store.beginOAuth();
 };
 </script>

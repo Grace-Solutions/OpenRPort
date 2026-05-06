@@ -19,12 +19,14 @@ fi
 export NUXT_API_URL="${RESOLVED_API_URL}"
 export NUXT_PUBLIC_API_URL="${RESOLVED_API_URL}"
 export NUXT_APP_BASE_URL="${NUXT_APP_BASE_URL:-/ui}"
+export NUXT_PUBLIC_AUTH_MODE="${NUXT_PUBLIC_AUTH_MODE:-both}"
 export HOST="${HOST:-0.0.0.0}"
 export PORT="${UI_INTERNAL_PORT:-${PORT:-3000}}"
 
-echo "[entrypoint] NUXT_API_URL        = ${NUXT_API_URL}"
-echo "[entrypoint] NUXT_PUBLIC_API_URL = ${NUXT_PUBLIC_API_URL}"
-echo "[entrypoint] NUXT_APP_BASE_URL   = ${NUXT_APP_BASE_URL}"
-echo "[entrypoint] HOST:PORT           = ${HOST}:${PORT}"
+echo "[entrypoint] NUXT_API_URL          = ${NUXT_API_URL}"
+echo "[entrypoint] NUXT_PUBLIC_API_URL   = ${NUXT_PUBLIC_API_URL}"
+echo "[entrypoint] NUXT_APP_BASE_URL     = ${NUXT_APP_BASE_URL}"
+echo "[entrypoint] NUXT_PUBLIC_AUTH_MODE = ${NUXT_PUBLIC_AUTH_MODE}"
+echo "[entrypoint] HOST:PORT             = ${HOST}:${PORT}"
 
 exec node /app/.output/server/index.mjs "$@"

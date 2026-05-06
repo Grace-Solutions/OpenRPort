@@ -136,6 +136,31 @@ export interface ILoginResponse {
 	token: string;
 	two_fa: TwoFa;
 }
+export interface AuthProviderInfo {
+	auth_provider: string;
+	settings_uri: string;
+	device_settings_uri?: string;
+	max_token_lifetime: number;
+	local_login_available: boolean;
+}
+export interface AuthProviderResponse {
+	data: AuthProviderInfo;
+}
+export interface OAuthLoginInfo {
+	message: string;
+	authorize_url: string;
+	login_uri: string;
+	state: string;
+	expiry: string;
+}
+export interface AuthSettings {
+	auth_provider: string;
+	details: OAuthLoginInfo;
+}
+export interface AuthSettingsResponse {
+	data: AuthSettings;
+}
+export type AuthMode = 'auto' | 'basic' | 'oidc' | 'both';
 export interface ProfileResponse {
 	data: Profile;
 }

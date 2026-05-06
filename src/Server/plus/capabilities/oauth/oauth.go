@@ -130,5 +130,12 @@ type Config struct {
 	RequiredRole  string `mapstructure:"required_role"`
 	UsernameClaim string `mapstructure:"username_claim"`
 
+	// AllowLocalLogin keeps the built-in username/password endpoints
+	// reachable as a break-glass mechanism when OAuth is otherwise the
+	// primary auth method. When false (default) the GET/POST /api/v1/login
+	// endpoints return 403 while OAuth is configured, matching upstream
+	// rport behaviour.
+	AllowLocalLogin bool `mapstructure:"allow_local_login"`
+
 	CompiledPermittedUserMatch *regexp.Regexp
 }

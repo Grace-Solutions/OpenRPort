@@ -1,7 +1,11 @@
 import type { FetchOptions } from 'ofetch';
-import { FetchError } from 'ofetch';
-import { HttpFactory, ApiResponse } from '~/repository/factory';
-import type { ApiLoginResponse, ILoginInput, ILoginResponse } from '~/types';
+import { HttpFactory } from '~/repository/factory';
+import type {
+	ApiLoginResponse,
+	AuthProviderResponse,
+	AuthSettingsResponse,
+	ILoginInput,
+} from '~/types';
 
 class AuthModule extends HttpFactory {
 	private RESOURCE = '/api/v1/login';
@@ -22,24 +26,44 @@ class AuthModule extends HttpFactory {
 		);
 	}
 
-	async provider(): Promise<any> {
-		return this.call<any>(
+	async provider(): Promise<AuthProviderResponse> {
+		return this.call<AuthProviderResponse>(
 			'GET',
-			'api/v1/provider',
+			'/api/v1/auth/provider',
 			undefined,
 		);
 	}
 
-	async logout(): Promise<any> {
+	async oauthSettings(): Promise<AuthSettingsResponse> {
+		return this.call<AuthSettingsResponse>(
+			'GET',
+			'/api/v1/auth/ext/settings',
+			undefined,
+		);
+	}
+
+	async oauthLogin(code: string, state: string, tokenLifetime: string): Promise<ApiLoginResponse> {
+		const params = new URLSearchParams();
+		if (code) params.set('code', code);
+		if (state) params.set('state', state);
+		if (tokenLifetime) params.set('token-lifetime', tokenLifetime);
+		return this.call<ApiLoginResponse>(
+			'GET',
+			`/api/v1/oauth/login?${params.toString()}`,
+			undefined,
+		);
+	}
+
+	async logout(token: string): Promise<any> {
 		const fetchOptions: FetchOptions<'json'> = {
 			headers: {
-				'Authorization': `Basic ${token}`,
+				'Authorization': `Bearer ${token}`,
 				'Content-Type': 'application/json',
 			},
 		};
 		return this.call<any>(
 			'DELETE',
-			'api/v1/logout',
+			'/api/v1/logout',
 			undefined,
 			fetchOptions,
 		);
@@ -54,7 +78,7 @@ class AuthModule extends HttpFactory {
 		};
 		return this.call<ApiLoginResponse>(
 			'POST',
-			`api/v1/verify-2fa?token-lifetime=${credentials.remember_me}`,
+			`/api/v1/verify-2fa?token-lifetime=${credentials.remember_me}`,
 			{
 				username: credentials.username,
 				token: twofaToken,

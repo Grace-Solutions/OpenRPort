@@ -8,7 +8,48 @@
 		<h1 class="pb-6 text-3xl">
 			Login
 		</h1>
-		<div>
+
+		<!-- Top-level error banner. Rendered outside the basic-form wrapper so
+		     OIDC start failures are still visible in oidc-only mode. -->
+		<div
+			v-show="errors.length > 0"
+			class="mb-4 rounded p-2.5 bg-red-50"
+		>
+			<div class="flex items-center">
+				<div class="ml-3 flex-grow">
+					<p class="text-sm font-medium text-red-800">
+						{{ errorMessage }}
+					</p>
+				</div>
+			</div>
+		</div>
+
+		<!-- OIDC button: shown when provider is non-built-in and the
+		     effective mode permits it. Rendered above the basic form so
+		     it's the obvious primary path when both are available. -->
+		<div
+			v-if="showOidc"
+			class="mb-4"
+		>
+			<button
+				type="button"
+				class="hover:opacity-80 px-6 py-3 w-full text-sm text-white rounded inline-flex items-center justify-center duration-200 focus:outline-none bg-primary"
+				@click.prevent="emitOidc"
+			>
+				Sign in with {{ providerLabel }}
+			</button>
+		</div>
+
+		<div
+			v-if="showOidc && showBasic"
+			class="my-4 flex items-center"
+		>
+			<div class="h-px flex-grow bg-theme-border" />
+			<span class="mx-3 text-xs text-theme-label">or</span>
+			<div class="h-px flex-grow bg-theme-border" />
+		</div>
+
+		<div v-if="showBasic">
 			<div class="flex flex-col">
 				<div class="relative mt-1 flex w-full flex-col">
 					<input
@@ -75,34 +116,6 @@
 						me for</label>
 				</div>
 			</div>
-			<div
-				v-show="errors.length > 0"
-				class="mt-1 rounded p-2.5 bg-red-50"
-			>
-				<div class="flex items-center">
-					<div class="flex-shrink-0">
-						<svg
-							data-v-ca945699=""
-							xmlns="http://www.w3.org/2000/svg"
-							width="24px"
-							height="24px"
-							viewBox="0 0 24 24"
-							class="icon text-red-400"
-						>
-							<g fill="currentColor">
-								<path
-									d="M4 12a8 8 0 1 1 16 0a8 8 0 0 1-16 0zm8-10C6.477 2 2 6.477 2 12s4.477 10 10 10s10-4.477 10-10S17.523 2 12 2zm-1.793 6.793a1 1 0 0 0-1.414 1.414L10.586 12l-1.793 1.793a1 1 0 1 0 1.414 1.414L12 13.414l1.793 1.793a1 1 0 0 0 1.414-1.414L13.414 12l1.793-1.793a1 1 0 0 0-1.414-1.414L12 10.586l-1.793-1.793z"
-								/>
-							</g>
-						</svg>
-					</div>
-					<div class="ml-3 mt-1 flex-grow">
-						<p class="text-sm font-medium text-red-800">
-							unauthorized
-						</p>
-					</div>
-				</div>
-			</div>
 			<div class="mt-6 flex items-center justify-start">
 				<button
 					class="hover:opacity-80 px-6 py-3 text-sm text-white rounded inline-flex items-center duration-200 focus:outline-none bg-primary"
@@ -154,8 +167,13 @@
 </template>
 
 <script lang="ts" setup>
-import { ref } from 'vue';
-import type { ILoginInput } from '~/types';
+import { computed, ref } from 'vue';
+import type { AuthMode, AuthProviderInfo, ILoginInput } from '~/types';
+
+const props = defineProps<{
+	provider?: AuthProviderInfo | null;
+	authMode?: AuthMode;
+}>();
 
 const store = useTokenStore();
 
@@ -165,11 +183,45 @@ const user = ref<ILoginInput>({
 	password: '',
 	remember_me: '3600',
 });
-const emit = defineEmits(['login']);
+const emit = defineEmits(['login', 'oidc']);
 const login = async () => {
 	const credentials: ILoginInput = {
 		...user.value,
 	};
 	emit('login', credentials);
 };
+const emitOidc = () => emit('oidc');
+
+// Resolve which surfaces to render based on operator's UI mode preference
+// crossed with what the server actually allows. The server is authoritative
+// on availability (see /api/v1/auth/provider), the UI mode is only used to
+// hide a path the operator doesn't want offered.
+const isBuiltIn = computed(() => !props.provider || props.provider.auth_provider === 'built-in');
+const oauthAvailable = computed(() => !!props.provider && !isBuiltIn.value);
+const localAvailable = computed(() => !props.provider || props.provider.local_login_available !== false);
+const mode = computed<AuthMode>(() => props.authMode || 'both');
+
+const showOidc = computed(() => {
+	if (!oauthAvailable.value) return false;
+	return mode.value === 'oidc' || mode.value === 'both' || mode.value === 'auto';
+});
+const showBasic = computed(() => {
+	if (!localAvailable.value) return false;
+	if (mode.value === 'oidc') return false;
+	if (mode.value === 'auto') return !oauthAvailable.value;
+	return true;
+});
+
+const providerLabel = computed(() => {
+	const p = props.provider?.auth_provider;
+	if (!p || p === 'built-in' || p === 'oidc') return 'OIDC';
+	return p.charAt(0).toUpperCase() + p.slice(1);
+});
+
+const errorMessage = computed(() => {
+	const e = errors.value as unknown;
+	if (Array.isArray(e)) return (e as string[]).join(' ');
+	if (typeof e === 'string') return e;
+	return 'unauthorized';
+});
 </script>

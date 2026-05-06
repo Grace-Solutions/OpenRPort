@@ -28,7 +28,7 @@ type loginResponse struct {
 }
 
 func (al *APIListener) handleGetLogin(w http.ResponseWriter, req *http.Request) {
-	if rportplus.IsPlusOAuthEnabled(al.config.PlusConfig) {
+	if !rportplus.IsLocalLoginAllowed(al.config.PlusConfig) {
 		al.jsonErrorResponse(w, http.StatusForbidden, errors.New("built-in authorization disabled. please authorize via your configured authorization"))
 		return
 	}
@@ -234,7 +234,7 @@ func (al *APIListener) sendJWTToken(username string, w http.ResponseWriter, req 
 }
 
 func (al *APIListener) handlePostLogin(w http.ResponseWriter, req *http.Request) {
-	if rportplus.IsPlusOAuthEnabled(al.config.PlusConfig) {
+	if !rportplus.IsLocalLoginAllowed(al.config.PlusConfig) {
 		al.jsonErrorResponse(w, http.StatusForbidden, errors.New("built-in authorization disabled. please authorize via your configured authorization"))
 		return
 	}
