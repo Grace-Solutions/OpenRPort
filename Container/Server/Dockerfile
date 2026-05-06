@@ -15,9 +15,12 @@ COPY src/Server/ .
 # Download deps (cached layer if go.sum unchanged)
 RUN go mod download
 
-# Build rportd – exact same flags as upstream Makefile
+# Build rportd. CGO is required because the source imports mattn/go-sqlite3
+# (whose Error type and ErrConstraint/ErrBusy constants are cgo-gated). The
+# upstream Makefile sets CGO_ENABLED=0 but doesn't actually compile cleanly;
+# upstream releases are built via goreleaser which enables cgo.
 RUN mkdir -p /out && \
-    CGO_ENABLED=0 go build \
+    CGO_ENABLED=1 go build \
       -ldflags="-s -w" \
       -o /out/rportd \
       -v \
