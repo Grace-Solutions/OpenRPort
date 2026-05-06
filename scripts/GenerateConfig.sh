@@ -81,7 +81,37 @@ cors        = ["${RPORTD_CORS_ORIGINS:-*}"]
 log_file    = "/var/log/rport/rportd.log"
 log_level   = "info"
 EOF
-echo "    Wrote: Server/Config/rportd.conf"
+
+# ── Optional [plus-plugin]/[plus-oauth] section (OIDC) ────────────────────
+# Activated only when RPORT_OIDC_ISSUER_URL is set. The plugin .so is built
+# into the Server image at /usr/local/lib/rport/rport-plus.so; override with
+# RPORT_PLUS_PLUGIN_PATH when bind-mounting an external build.
+if [ -n "${RPORT_OIDC_ISSUER_URL:-}" ]; then
+  PLUGIN_PATH="${RPORT_PLUS_PLUGIN_PATH:-/usr/local/lib/rport/rport-plus.so}"
+  OIDC_REDIRECT="${RPORT_OIDC_REDIRECT_URI:-${SERVER_URL}/oauth/callback}"
+  OIDC_AUTHZ="${RPORT_OIDC_AUTHORIZE_URL:-${RPORT_OIDC_ISSUER_URL%/}/protocol/openid-connect/auth}"
+  OIDC_TOKEN="${RPORT_OIDC_TOKEN_URL:-${RPORT_OIDC_ISSUER_URL%/}/protocol/openid-connect/token}"
+  OIDC_JWKS="${RPORT_OIDC_JWKS_URL:-${RPORT_OIDC_ISSUER_URL%/}/protocol/openid-connect/certs}"
+  cat >> "$RPORTD_CONF" <<EOF
+
+[plus-plugin]
+plugin_path = "${PLUGIN_PATH}"
+
+[plus-oauth]
+provider             = "${RPORT_OIDC_PROVIDER:-oidc}"
+authorize_url        = "${OIDC_AUTHZ}"
+token_url            = "${OIDC_TOKEN}"
+redirect_uri         = "${OIDC_REDIRECT}"
+client_id            = "${RPORT_OIDC_CLIENT_ID:?RPORT_OIDC_CLIENT_ID required when RPORT_OIDC_ISSUER_URL is set}"
+client_secret        = "${RPORT_OIDC_CLIENT_SECRET:?RPORT_OIDC_CLIENT_SECRET required when RPORT_OIDC_ISSUER_URL is set}"
+jwks_url             = "${OIDC_JWKS}"
+username_claim       = "${RPORT_OIDC_USERNAME_CLAIM:-preferred_username}"
+permitted_user_match = "${RPORT_OIDC_PERMITTED_USER_MATCH:-.*}"
+EOF
+  echo "    Wrote: Server/Config/rportd.conf (with [plus-oauth] -> ${RPORT_OIDC_ISSUER_URL})"
+else
+  echo "    Wrote: Server/Config/rportd.conf"
+fi
 
 # ── pairing config.toml ────────────────────────────────────────────────────
 PAIRING_CONF="${ROOT}/Pairing/Config/config.toml"

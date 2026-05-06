@@ -1,6 +1,6 @@
 module github.com/openrport/openrport
 
-go 1.19
+go 1.21
 
 require (
 	github.com/asaskevich/govalidator v0.0.0-20210307081110-f21760c49a8d
@@ -53,11 +53,11 @@ require (
 	github.com/tklauser/numcpus v0.6.0 // indirect
 	github.com/wwt/guac v1.3.1
 	github.com/yusufpapurcu/wmi v1.2.2 // indirect
-	golang.org/x/crypto v0.15.0
+	golang.org/x/crypto v0.19.0
 	golang.org/x/net v0.18.0
 	golang.org/x/sync v0.3.0
-	golang.org/x/sys v0.14.0
-	golang.org/x/term v0.14.0
+	golang.org/x/sys v0.17.0
+	golang.org/x/term v0.17.0
 	golang.org/x/text v0.14.0
 	gopkg.in/h2non/gock.v1 v1.1.2
 	gopkg.in/ini.v1 v1.67.0 // indirect
@@ -84,12 +84,15 @@ require (
 )
 
 require (
+	github.com/coreos/go-oidc/v3 v3.10.0 // indirect
+	github.com/go-jose/go-jose/v4 v4.0.1 // indirect
 	github.com/pelletier/go-toml/v2 v2.1.0 // indirect
 	github.com/sagikazarmark/locafero v0.3.0 // indirect
 	github.com/sagikazarmark/slog-shim v0.1.0 // indirect
 	github.com/sourcegraph/conc v0.3.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/exp v0.0.0-20231110203233-9a3e6036ecaa // indirect
+	golang.org/x/oauth2 v0.20.0 // indirect
 )
 
 require go.etcd.io/bbolt v1.3.7

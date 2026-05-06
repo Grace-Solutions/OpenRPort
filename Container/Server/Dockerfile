@@ -26,6 +26,14 @@ RUN mkdir -p /out && \
       -v \
       ./cmd/rportd
 
+# Build the open-source rport-plus OIDC plugin alongside rportd. Same Go
+# version, same go.mod, same CGO setting -> guaranteed ABI compatibility
+# when rportd loads it via plugin.Open at startup.
+RUN CGO_ENABLED=1 go build \
+      -buildmode=plugin \
+      -o /out/rport-plus.so \
+      ./cmd/rport-plus-oidc
+
 # ── Stage 2: Runtime ──────────────────────────────────────────────────────────
 FROM debian:bookworm-slim AS runtime
 
@@ -41,6 +49,7 @@ RUN groupadd -r rport && useradd -r -g rport -d /var/lib/rport rport && \
     chown -R rport:rport /var/lib/rport /etc/rport
 
 COPY --from=builder /out/rportd /usr/local/bin/rportd
+COPY --from=builder /out/rport-plus.so /usr/local/lib/rport/rport-plus.so
 
 # Container/Server/entrypoint.sh handles header discovery + config mount
 COPY Container/Server/entrypoint.sh /entrypoint.sh
