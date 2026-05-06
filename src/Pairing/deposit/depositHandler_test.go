@@ -33,24 +33,37 @@ func TestFormRequest(t *testing.T) {
 		_, err = io.Copy(fw, strings.NewReader(v))
 		require.NoError(t, err)
 	}
+	// Two repeated tag fields plus a comma-separated value to exercise the
+	// multi-value + CSV split paths of splitTagValues.
+	for _, tag := range []string{"prod", "us-east", "build:42, owner:ops"} {
+		fw, err := writer.CreateFormField("tags")
+		require.NoError(t, err)
+		_, err = io.Copy(fw, strings.NewReader(tag))
+		require.NoError(t, err)
+	}
 	err := writer.Close()
 	require.NoError(t, err)
 	t.Log("From request")
 	request, _ := http.NewRequest(http.MethodPost, "/", bytes.NewReader(body.Bytes()))
 	request.Header.Set("Content-Type", writer.FormDataContentType())
-	executeAndValidate(t, request)
+	executeAndValidate(t, request, []string{"prod", "us-east", "build:42", "owner:ops"})
 }
 
 func TestJsonRequest(t *testing.T) {
-	payload, err := json.Marshal(FormFields)
+	payload := map[string]interface{}{}
+	for k, v := range FormFields {
+		payload[k] = v
+	}
+	payload["tags"] = []string{"prod", "us-east"}
+	body, err := json.Marshal(payload)
 	require.NoError(t, err)
-	t.Logf("Json request with payload created %s", payload)
-	request, _ := http.NewRequest(http.MethodPost, "/", bytes.NewReader(payload))
+	t.Logf("Json request with payload created %s", body)
+	request, _ := http.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	request.Header.Set("Content-Type", "application/json")
-	executeAndValidate(t, request)
+	executeAndValidate(t, request, []string{"prod", "us-east"})
 }
 
-func executeAndValidate(t *testing.T, request *http.Request) {
+func executeAndValidate(t *testing.T, request *http.Request, expectedTags []string) {
 	recorder := httptest.NewRecorder()
 	c := cache.New()
 	// Create request handlers
@@ -64,6 +77,8 @@ func executeAndValidate(t *testing.T, request *http.Request) {
 	require.NoError(t, err)
 	t.Log("Got pairing code ", response.PairingCode)
 	// Assert the returned pairing code equals the one stored in the cache
-	_, ok := c.Get(response.PairingCode)
+	cached, ok := c.Get(response.PairingCode)
 	assert.True(t, ok, "Pairing code not found in cache")
+	dep := cached.(deposit.Deposit)
+	assert.Equal(t, expectedTags, dep.Tags, "Tags did not round-trip through the cache")
 }

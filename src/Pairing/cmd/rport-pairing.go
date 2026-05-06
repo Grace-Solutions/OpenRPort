@@ -39,10 +39,12 @@ func main() {
 		StaticDeposit: config.StaticDeposit,
 		Cache:         c,
 		Downloads:     config.Downloads,
+		PairingUrl:    config.Server.Url,
 	}
 	updateHandler := &retrieve.UpdateHandler{
 		StaticDeposit: config.StaticDeposit,
 		Downloads:     config.Downloads,
+		PairingUrl:    config.Server.Url,
 	}
 	corsHandler := &cors.Handler{}
 

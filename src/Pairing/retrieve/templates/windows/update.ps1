@@ -14,14 +14,9 @@ Parameters:
 "
     exit
 }
-$release = If ($t)
-{
-    "unstable"
-}
-Else
-{
-    "stable"
-}
+# $release is pre-set by vars.ps1 from the pairing-service config. -t still
+# forces the unstable channel at runtime.
+if ($t) { $release = "unstable" }
 $enableScripts = $null
 $enableScripts = If ($x)
 {

@@ -1,7 +1,7 @@
 set -e
 download_new_version() {
     TEMP=$(mktemp -d)
-    URL="https://download.openrport.io/rport/${RELEASE}/latest.php?filter=Linux_${ARCH}&gt=${CURRENT_VERSION}"
+    URL="${BINARIES_BASE_URL}/rport/${RELEASE}/latest.php?filter=Linux_${ARCH}&gt=${CURRENT_VERSION}"
     curl -Ls "${URL}" -o "${TEMP}/rport.tar.gz"
     tar xzf "$TEMP/rport.tar.gz" -C "$TEMP" rport
     rm -f "$TEMP/rport.tar.gz"
@@ -20,7 +20,7 @@ download_package() {
       exit 1
     fi
   else
-    URL="https://download.openrport.io/rport/${RELEASE}/latest.php?arch=Linux_${ARCH}"
+    URL="${BINARIES_BASE_URL}/rport/${RELEASE}/latest.php?arch=Linux_${ARCH}"
   fi
   curl -Ls "${URL}" -o rport.tar.gz
 }
@@ -91,7 +91,7 @@ update() {
           else
               install_via_rpm_repo
           fi
-      elif [ -z "$(curl -s "https://download.rport.io/rport/${RELEASE}/latest.php?return=version&gt=${CURRENT_VERSION}")" ]; then
+      elif [ -z "$(curl -s "${BINARIES_BASE_URL}/rport/${RELEASE}/latest.php?return=version&gt=${CURRENT_VERSION}")" ]; then
           throw_info "Nothing to do. RPort is on the latest version ${CURRENT_VERSION}."
           [ "$ENABLE_TACOSCRIPT" -eq 1 ] && install_tacoscript
           exit 0
@@ -379,7 +379,9 @@ EOF
 ACTION=update
 ENABLE_TACOSCRIPT=1
 ENABLE_SUDO=2
-RELEASE=stable
+# RELEASE defaults to whatever vars.sh injected (server-configured channel
+# or upstream "stable"). The -t flag may still override it below.
+: "${RELEASE:=stable}"
 ENABLE_SCRIPTS=undef
 VERSION=undef
 ENABLE_FILEREC=0

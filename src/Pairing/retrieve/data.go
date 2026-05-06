@@ -48,9 +48,12 @@ func (d Downloads) withDefaults() Downloads {
 // InstallerData is the value passed to the Go templates. It composes a
 // (sanitized) Deposit with the service-level Downloads config plus a few
 // pre-rendered shell snippets so the templates stay free of looping logic.
+// PairingUrl is the public base URL of the pairing service itself, used by
+// rendered scripts that need to point users at the /update endpoint.
 type InstallerData struct {
 	deposit.Deposit
 	Downloads
+	PairingUrl string
 }
 
 // TagsBash renders the Tags slice as the body of a POSIX shell array, e.g.

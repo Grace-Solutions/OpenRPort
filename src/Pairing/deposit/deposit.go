@@ -23,14 +23,19 @@ type Response struct {
 	} `json:"installers"`
 }
 
+// rplForBash escapes characters that have meaning inside a double-quoted
+// bash string. The ordering matters: backslashes must be doubled first,
+// otherwise a later replacement that introduces a backslash would itself be
+// re-escaped on the second pass. A map literal would iterate in
+// non-deterministic order, so we use an explicit slice.
 func rplForBash(in string) (out string) {
-	rpl := map[string]string{
-		"\\": "\\\\",
-		"\"": "\\\"",
-		"$":  "\\$",
+	rpl := []struct{ from, to string }{
+		{"\\", "\\\\"},
+		{"\"", "\\\""},
+		{"$", "\\$"},
 	}
-	for s, r := range rpl {
-		in = strings.ReplaceAll(in, s, r)
+	for _, p := range rpl {
+		in = strings.ReplaceAll(in, p.from, p.to)
 	}
 	return in
 }
@@ -49,14 +54,17 @@ func SanitizeForBash(in Deposit) (out Deposit) {
 	}
 }
 
+// rplForPowerShell escapes characters that have meaning inside a
+// double-quoted PowerShell string. As with rplForBash the order must be
+// deterministic so backquotes are escaped first.
 func rplForPowerShell(in string) (out string) {
-	rpl := map[string]string{
-		"`":  "``",
-		"\"": "`\"",
-		"$":  "`$",
+	rpl := []struct{ from, to string }{
+		{"`", "``"},
+		{"\"", "`\""},
+		{"$", "`$"},
 	}
-	for s, r := range rpl {
-		in = strings.ReplaceAll(in, s, r)
+	for _, p := range rpl {
+		in = strings.ReplaceAll(in, p.from, p.to)
 	}
 	return in
 }

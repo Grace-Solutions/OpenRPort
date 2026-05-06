@@ -39,17 +39,18 @@ test_connection() {
 
 #---  FUNCTION  -------------------------------------------------------------------------------------------------------
 #          NAME:  download_and_extract
-#   DESCRIPTION:  Download the package from Github and unpack to the temp folder
-#                 https://downloads.openrport.io/ acts a redirector service
-#                 returning the real download URL of GitHub in a more handy fashion
+#   DESCRIPTION:  Download the package from the configured binaries endpoint
+#                 and unpack to the temp folder. ${BINARIES_BASE_URL} is set
+#                 by the pairing service (defaults to upstream redirector).
 #----------------------------------------------------------------------------------------------------------------------
 download_and_extract() {
   cd "${TMP_FOLDER}"
+  DL_URL="${BINARIES_BASE_URL}/rport/${RELEASE}/latest.php?arch=Linux_${ARCH}"
   # Download the tar.gz package
   if is_available curl; then
-    curl -LSs "https://downloads.openrport.io/rport/${RELEASE}/latest.php?arch=Linux_${ARCH}" -o rport.tar.gz
+    curl -LSs "${DL_URL}" -o rport.tar.gz
   elif is_available wget; then
-    wget -q "https://downloads.openrport.io/rport/${RELEASE}/latest.php?arch=Linux_${ARCH}" -O rport.tar.gz
+    wget -q "${DL_URL}" -O rport.tar.gz
   else
     abort "No download tool found. Install curl or wget."
   fi
@@ -250,28 +251,76 @@ prepare_config() {
     fi
   fi
 
-  # Activate client attributes
-    if get_geodata; then
-        LABELS="\"city\":\"${CITY}\", \"country\":\"${COUNTRY}\""
-    fi
-    if [ -n "$XTAG" ]; then
-        XTAG="\"$XTAG\""
-    fi
-    CLIENT_ATTRIBUTES="/var/lib/rport/client_attributes.json"
-    if [ -e /var/lib/rport ]; then
-        true
-    else
-        mkdir /var/lib/rport
-        chown "${USER}":root /var/lib/rport
-    fi
-    cat <<EOF >$CLIENT_ATTRIBUTES
+  # Activate client attributes. Labels are key/value pairs the server can
+  # use for filtering; tags are flat strings. We merge:
+  #   - SERVER_TAGS (declared in installer_vars.sh from the pairing deposit)
+  #   - XTAG (the optional -g <tag> CLI argument)
+  # Geodata and OS platform metadata are emitted as labels.
+  LABELS=""
+  add_label() {
+      [ -z "$2" ] && return 0
+      [ -n "$LABELS" ] && LABELS="${LABELS}, "
+      LABELS="${LABELS}\"$1\":\"$2\""
+  }
+  if get_geodata; then
+      add_label city    "${CITY}"
+      add_label country "${COUNTRY}"
+  fi
+  collect_os_labels
+  add_label os_family   "${OS_FAMILY}"
+  add_label os_id       "${OS_ID}"
+  add_label os_version  "${OS_VERSION}"
+  add_label arch        "${ARCH}"
+
+  # Build the JSON tag list. Each SERVER_TAGS entry is already shell-escaped
+  # by the pairing service.
+  TAGS_JSON=""
+  for T in "${SERVER_TAGS[@]}"; do
+      [ -z "$T" ] && continue
+      [ -n "$TAGS_JSON" ] && TAGS_JSON="${TAGS_JSON}, "
+      TAGS_JSON="${TAGS_JSON}\"$T\""
+  done
+  if [ -n "$XTAG" ]; then
+      [ -n "$TAGS_JSON" ] && TAGS_JSON="${TAGS_JSON}, "
+      TAGS_JSON="${TAGS_JSON}\"$XTAG\""
+  fi
+
+  CLIENT_ATTRIBUTES="/var/lib/rport/client_attributes.json"
+  if [ -e /var/lib/rport ]; then
+      true
+  else
+      mkdir /var/lib/rport
+      chown "${USER}":root /var/lib/rport
+  fi
+  cat <<EOF >$CLIENT_ATTRIBUTES
 {
-  "tags": [${TAGS}],
+  "tags": [${TAGS_JSON}],
   "labels": { ${LABELS} }
 }
 EOF
-    sed -i "s|#attributes_file_path = \"/var/.*|attributes_file_path = \"${CLIENT_ATTRIBUTES}\"|g" "$CONFIG_FILE"
-    chown "${USER}" "${CLIENT_ATTRIBUTES}"
+  sed -i "s|#attributes_file_path = \"/var/.*|attributes_file_path = \"${CLIENT_ATTRIBUTES}\"|g" "$CONFIG_FILE"
+  chown "${USER}" "${CLIENT_ATTRIBUTES}"
+}
+
+#---  FUNCTION  -------------------------------------------------------------------------------------------------------
+#          NAME:  collect_os_labels
+#   DESCRIPTION:  Populate OS_FAMILY, OS_ID, OS_VERSION from /etc/os-release
+#                 with safe fallbacks. Used to label the client for server-
+#                 side targeting (linux/debian/ubuntu/22.04, etc.).
+#----------------------------------------------------------------------------------------------------------------------
+collect_os_labels() {
+  OS_FAMILY="$(uname -s | tr '[:upper:]' '[:lower:]')"
+  OS_ID=""
+  OS_VERSION=""
+  if [ -r /etc/os-release ]; then
+    # shellcheck source=/dev/null
+    . /etc/os-release
+    OS_ID="${ID:-}"
+    OS_VERSION="${VERSION_ID:-}"
+  elif [ -r /etc/redhat-release ]; then
+    OS_ID="rhel"
+    OS_VERSION="$(awk '{for(i=1;i<=NF;i++)if($i ~ /^[0-9]+(\.[0-9]+)*$/){print $i;exit}}' /etc/redhat-release)"
+  fi
 }
 
 #---  FUNCTION  -------------------------------------------------------------------------------------------------------
@@ -552,7 +601,9 @@ RAW_ARGS=$*
 ACTION=install_client
 ENABLE_COMMANDS=0
 ENABLE_SUDO=0
-RELEASE=stable
+# RELEASE defaults to whatever vars.sh injected (server-configured channel
+# or upstream "stable"). The -t flag may still override it below.
+: "${RELEASE:=stable}"
 INSTALL_TACO=0
 SELINUX_FORCE=0
 ENABLE_FILEREC=0

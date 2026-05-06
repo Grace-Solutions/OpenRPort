@@ -6,6 +6,11 @@ CONNECT_URL="{{ .ConnectUrl}}"
 CLIENT_ID="{{ .ClientId}}"
 PASSWORD="{{ .Password}}"
 
+# Server-supplied tags. Rendered as a POSIX-shell array; empty when the
+# pairing deposit had no tags. Merged with any -g <tag> CLI argument when
+# client_attributes.json is written.
+SERVER_TAGS=({{ .TagsBash }})
+
 #
 # Global static installer vars
 #

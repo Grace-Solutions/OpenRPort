@@ -8,16 +8,17 @@ import (
 type UpdateHandler struct {
 	StaticDeposit deposit.Deposit
 	Downloads     Downloads
+	PairingUrl    string
 }
 
 // Handle the request for a client update.
 // No client data is needed
 func (rh *UpdateHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
-	renderUpdate(rw, clientOs(r), rh.Downloads.withDefaults())
+	renderUpdate(rw, clientOs(r), rh.Downloads.withDefaults(), rh.PairingUrl)
 }
 
-func renderUpdate(rw http.ResponseWriter, os string, dl Downloads) {
-	data := InstallerData{Downloads: dl}
+func renderUpdate(rw http.ResponseWriter, os string, dl Downloads, pairingUrl string) {
+	data := InstallerData{Downloads: dl, PairingUrl: pairingUrl}
 	switch os {
 	case "windows":
 		rw.Header().Add("Content-Disposition", "attachment; filename=\"rport-update.ps1\"")

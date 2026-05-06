@@ -261,7 +261,7 @@ update_tacoscript() {
   TACO_VERSION=$(/usr/local/bin/tacoscript --version | grep -o "Version:.*" | awk '{print $2}')
   cd /tmp
   test -e tacoscript.tar.gz && rm -f tacoscript.tar.gz
-  curl -LSso tacoscript.tar.gz "https://download.rport.io/tacoscript/${RELEASE}/?arch=Linux_${ARCH}&gt=$TACO_VERSION"
+  curl -LSso tacoscript.tar.gz "${TACO_BASE_URL}/tacoscript/${RELEASE}/?arch=Linux_${ARCH}&gt=$TACO_VERSION"
   if tar xzf tacoscript.tar.gz 2>/dev/null; then
     echo ""
     throw_info "Updating Tacoscript from ${TACO_VERSION} to latest ${RELEASE} $(./tacoscript --version | grep -o "Version:.*")"
@@ -283,7 +283,7 @@ install_tacoscript() {
   fi
   cd /tmp
   test -e tacoscript.tar.gz && rm -f tacoscript.tar.gz
-  curl -Ls "https://download.rport.io/tacoscript/${RELEASE}/?arch=Linux_${ARCH}" -o tacoscript.tar.gz
+  curl -Ls "${TACO_BASE_URL}/tacoscript/${RELEASE}/?arch=Linux_${ARCH}" -o tacoscript.tar.gz
   tar xvzf tacoscript.tar.gz -C /usr/local/bin/ tacoscript
   rm -f tacoscript.tar.gz
   echo "Tacoscript installed $(/usr/local/bin/tacoscript --version)"
@@ -532,8 +532,8 @@ install_via_deb_repo() {
         else
             CODENAME=$VERSION_CODENAME
         fi
-        curl -sf https://repo.openrport.io/dearmor.gpg >/etc/apt/trusted.gpg.d/openrport.gpg
-        echo "deb [signed-by=/etc/apt/trusted.gpg.d/openrport.gpg] https://repo.openrport.io/deb ${CODENAME} ${RELEASE}" >/etc/apt/sources.list.d/rport.list
+        curl -sf "${REPO_BASE_URL}/dearmor.gpg" >/etc/apt/trusted.gpg.d/openrport.gpg
+        echo "deb [signed-by=/etc/apt/trusted.gpg.d/openrport.gpg] ${REPO_BASE_URL}/deb ${CODENAME} ${RELEASE}" >/etc/apt/sources.list.d/rport.list
     fi
     apt-get update
     if dpkg -s rport >/dev/null 2>&1 && ! [ -e /etc/rport/rport.conf ]; then
@@ -555,14 +555,14 @@ install_via_rpm_repo() {
         throw_info "System is already using the rport yum repo."
     else
         throw_info "RPort will use RPM package ..."
-        rpm --import https://repo.openrport.io/key.gpg
+        rpm --import "${REPO_BASE_URL}/key.gpg"
         cat <<EOF >/etc/yum.repos.d/rport.repo
 [rport-stable]
 name=RPort $RELEASE
-baseurl=https://repo.openrport.io/rpm/$RELEASE/
+baseurl=${REPO_BASE_URL}/rpm/$RELEASE/
 enabled=1
 gpgcheck=1
-gpgkey=https://repo.openrport.io/key.gpg
+gpgkey=${REPO_BASE_URL}/key.gpg
 EOF
     fi
     dnf -y install rport --refresh

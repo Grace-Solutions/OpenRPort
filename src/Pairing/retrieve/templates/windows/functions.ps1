@@ -212,7 +212,7 @@ function Install-Tacoupdate
     if ((Out-String -InputObject (& 'C:\Program Files\tacoscript\bin\tacoscript.exe' --version)) -match "Version: (.*)")
     {
         $tacoVersion = $matches[1].trim()
-        $tacoUpdateUrl = "https://downloads.openrport.io/tacoscript/$( $release )/?arch=Windows_x86_64&gt=$tacoVersion"
+        $tacoUpdateUrl = "$( $taco_base_url )/tacoscript/$( $release )/?arch=Windows_x86_64&gt=$tacoVersion"
         [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
         Invoke-WebRequest -Uri $tacoUpdateUrl -OutFile $tacoUpdate -UseBasicParsing
         If ((Get-Item tacoupdate.zip).length -eq 0)
@@ -242,7 +242,7 @@ function Install-Tacoscript
     }
     $Temp = [System.Environment]::GetEnvironmentVariable('TEMP', 'Machine')
     Set-Location $Temp
-    $url = "https://download.openrport.io/tacoscript/$( $release )/?arch=Windows_x86_64"
+    $url = "$( $taco_base_url )/tacoscript/$( $release )/?arch=Windows_x86_64"
     $file = $temp + "\tacoscript.zip"
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
     Invoke-WebRequest -Uri $url -OutFile $file -UseBasicParsing
@@ -560,7 +560,7 @@ function Invoke-Download
     else
     {
         $downloadFile = "C:\Windows\temp\rport_$( $release )_Windows_x86_64.msi"
-        $url = "https://downloads.openrport.io/rport/$( $release )/latest.php?filter=Windows_x86_64.msi&gt=$( $gt )"
+        $url = "$( $binaries_base_url )/rport/$( $release )/latest.php?filter=Windows_x86_64.msi&gt=$( $gt )"
     }
 
     if (Test-Path $downloadFile -PathType leaf)

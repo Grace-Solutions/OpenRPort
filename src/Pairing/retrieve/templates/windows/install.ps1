@@ -1,11 +1,6 @@
-$release = If ($t)
-{
-    "unstable"
-}
-Else
-{
-    "stable"
-}
+# $release is pre-set by vars.ps1 from the pairing-service config (default
+# "stable"). The -t flag still forces the unstable channel at runtime.
+if ($t) { $release = "unstable" }
 $myLocation = (Get-Location).path
 $installDir = "$( $Env:Programfiles )\rport"
 $dataDir = "$( $installDir )\data"
@@ -16,13 +11,12 @@ if (Test-Path $installDir)
     Write-Output "RPort is already installed."
     Write-Output "Download and execute the update script."
     Write-Output "Try the following:"
-    Write-Output 'cd $env:temp
+    Write-Output "cd `$env:temp
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-$url="https://pairing.openrport.io/update"
-Invoke-WebRequest -Uri $url -OutFile "rport-update.ps1"
+Invoke-WebRequest -Uri '$( $update_url )' -OutFile 'rport-update.ps1'
 powershell -ExecutionPolicy Bypass -File .\rport-update.ps1
 rm .\rport-update.ps1 -Force
-'
+"
     exit
 }
 
@@ -117,6 +111,14 @@ $attributes = @{
     'tags' = @()
     'labels' = @{}
 }
+# Server-supplied tags from the pairing deposit (vars.ps1 sets $server_tags).
+if ($server_tags)
+{
+    foreach ($srvTag in $server_tags)
+    {
+        if ($srvTag) { $attributes.tags += $srvTag }
+    }
+}
 # Get the location of the server
 $geoUrl = "http://ip-api.com/json/?fields=status,country,city"
 try
@@ -124,7 +126,6 @@ try
     $geoData = Invoke-RestMethod -Uri $geoUrl -TimeoutSec 5
     if ("success" -eq $geoData.status)
     {
-        # Add geo data as tags
         $attributes.labels.country = $geoData.country
         $attributes.labels.city = $geoData.city
     }
@@ -134,9 +135,23 @@ catch
     Write-Output ": Fetching geodata failed. Skipping"
 }
 
+# OS platform labels for server-side targeting.
+try
+{
+    $osInfo = Get-CimInstance -ClassName Win32_OperatingSystem -ErrorAction Stop
+    $attributes.labels.os_family  = "windows"
+    $attributes.labels.os_id      = ($osInfo.Caption -replace 'Microsoft\s+', '').Trim()
+    $attributes.labels.os_version = $osInfo.Version
+    $attributes.labels.arch       = $env:PROCESSOR_ARCHITECTURE
+}
+catch
+{
+    Write-Output ": Collecting OS labels failed. Skipping"
+}
+
 if ($g)
 {
-    # Add a custom tag
+    # Append the optional CLI tag.
     $attributes.tags += $g
 }
 $configContent = Set-TomlVar -ConfigContent $configContent `
