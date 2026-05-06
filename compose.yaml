@@ -24,16 +24,18 @@
 #   or 127.0.0.1 when collocated with the edge reverse proxy on a VPS).
 #
 # ENDPOINTS (each service listens on its own port on ${BIND_ADDRESS}):
-#   - SERVER_API_INTERNAL_PORT    (8080) -> rportd HTTP API   (/api/v1/*)
-#   - SERVER_CLIENT_INTERNAL_PORT (8081) -> rportd chisel WS (agent connect)
-#   - PAIRING_INTERNAL_PORT       (8082) -> rport-pairing
-#                                           + static agent binaries at
-#                                           ${OPENRPORT_BINARIES_BASE_PATH}/*
-#   - UI_INTERNAL_PORT            (8083) -> Nuxt UI
-#   - 20000-30000                        -> agent reverse-tunnel pool, owned
-#                                           by rportd; configurable via
-#                                           OPENRPORT_TUNNEL_USED_PORTS /
-#                                           OPENRPORT_TUNNEL_EXCLUDED_PORTS
+#   - SERVER_API_INTERNAL_PORT    (38100) -> rportd HTTP API   (/api/v1/*)
+#   - SERVER_CLIENT_INTERNAL_PORT (38101) -> rportd chisel WS (agent connect,
+#                                            HTTP Upgrade)
+#   - PAIRING_INTERNAL_PORT       (38102) -> rport-pairing
+#                                            + static agent binaries at
+#                                            ${OPENRPORT_BINARIES_BASE_PATH}/*
+#   - UI_INTERNAL_PORT            (38103) -> Nuxt UI
+#   - 38200-38400                         -> agent reverse-tunnel pool, owned
+#                                            by rportd (raw TCP listeners);
+#                                            configurable via
+#                                            OPENRPORT_TUNNEL_USED_PORTS /
+#                                            OPENRPORT_TUNNEL_EXCLUDED_PORTS
 #
 #=============================================================================
 
@@ -57,8 +59,8 @@ services:
       OPENRPORT_SERVER_PUBLIC_URL: '${OPENRPORT_SERVER_PUBLIC_URL:-}'
       OPENRPORT_PAIRING_PUBLIC_URL: '${OPENRPORT_PAIRING_PUBLIC_URL:-}'
       OPENRPORT_PAIRING_BASE_PATH: '${OPENRPORT_PAIRING_BASE_PATH:-/pairing}'
-      SERVER_API_INTERNAL_PORT: '${SERVER_API_INTERNAL_PORT:-8080}'
-      SERVER_CLIENT_INTERNAL_PORT: '${SERVER_CLIENT_INTERNAL_PORT:-8081}'
+      SERVER_API_INTERNAL_PORT: '${SERVER_API_INTERNAL_PORT:-38100}'
+      SERVER_CLIENT_INTERNAL_PORT: '${SERVER_CLIENT_INTERNAL_PORT:-38101}'
       RPORTD_API_USER: '${RPORTD_API_USER:-admin}'
       RPORTD_API_PASSWORD: '${RPORTD_API_PASSWORD:-1b9b56df4e046cb62e893b40e19d5899}'
       RPORTD_KEY_SEED: '${RPORTD_KEY_SEED:-4c770f5960d42f4512d2b1f4fd2d81404d4d}'
@@ -76,13 +78,13 @@ services:
     # directly on the host. The actual bind address is set per-service in the
     # generated rportd.conf via OPENRPORT_SERVER_*_BIND_ADDRESS.
     expose:
-      - "${SERVER_API_INTERNAL_PORT:-8080}"
-      - "${SERVER_CLIENT_INTERNAL_PORT:-8081}"
-      - "${OPENRPORT_TUNNEL_USED_PORTS:-20000-30000}"
+      - "${SERVER_API_INTERNAL_PORT:-38100}"
+      - "${SERVER_CLIENT_INTERNAL_PORT:-38101}"
+      - "${OPENRPORT_TUNNEL_USED_PORTS:-38200-38400}"
     healthcheck:
       # /api/v1/status returns 401 (wget exit 6) without auth or 429 (exit 8)
       # when rate-limited; both prove the API is listening.
-      test: ["CMD-SHELL", "wget --tries=1 --timeout=5 -qO- http://localhost:${SERVER_API_INTERNAL_PORT:-8080}/api/v1/status >/dev/null 2>&1; case $$? in 0|3|5|6|7|8) exit 0;; *) exit 1;; esac"]
+      test: ["CMD-SHELL", "wget --tries=1 --timeout=5 -qO- http://localhost:${SERVER_API_INTERNAL_PORT:-38100}/api/v1/status >/dev/null 2>&1; case $$? in 0|3|5|6|7|8) exit 0;; *) exit 1;; esac"]
       start_period: 30s
       interval: 30s
       retries: 5
@@ -108,7 +110,7 @@ services:
       OPENRPORT_DEPLOYMENT_MODE: '${OPENRPORT_DEPLOYMENT_MODE:-subpath}'
       OPENRPORT_PAIRING_PUBLIC_URL: '${OPENRPORT_PAIRING_PUBLIC_URL:-}'
       OPENRPORT_PAIRING_BASE_PATH: '${OPENRPORT_PAIRING_BASE_PATH:-/pairing}'
-      PAIRING_INTERNAL_PORT: '${PAIRING_INTERNAL_PORT:-8082}'
+      PAIRING_INTERNAL_PORT: '${PAIRING_INTERNAL_PORT:-38102}'
       RPORT_PAIRING_BINARIES_DIR: '/usr/share/rport-pairing/binaries'
       RPORT_PAIRING_BINARIES_PATH: '${OPENRPORT_BINARIES_BASE_PATH:-/binaries}'
     network_mode: host
@@ -119,9 +121,9 @@ services:
       - "${STACK_BINDMOUNTROOT:-/mnt/data/docker/stacks}/OpenRPort/Pairing/Logs:/var/log/rport-pairing:rw"
       - "${STACK_BINDMOUNTROOT:-/mnt/data/docker/stacks}/OpenRPort/Binaries/Data:/usr/share/rport-pairing/binaries:ro"
     expose:
-      - "${PAIRING_INTERNAL_PORT:-8082}"
+      - "${PAIRING_INTERNAL_PORT:-38102}"
     healthcheck:
-      test: ["CMD-SHELL", "wget --tries=1 --timeout=5 -qO- http://localhost:${PAIRING_INTERNAL_PORT:-8082}/update >/dev/null 2>&1; case $$? in 0|3|5|6|7|8) exit 0;; *) exit 1;; esac"]
+      test: ["CMD-SHELL", "wget --tries=1 --timeout=5 -qO- http://localhost:${PAIRING_INTERNAL_PORT:-38102}/update >/dev/null 2>&1; case $$? in 0|3|5|6|7|8) exit 0;; *) exit 1;; esac"]
       start_period: 15s
       interval: 30s
       retries: 5
@@ -149,16 +151,16 @@ services:
       NUXT_APP_BASE_URL: '${OPENRPORT_UI_BASE_PATH:-/ui}'
       NUXT_PUBLIC_API_URL: '${OPENRPORT_SERVER_API_URL:-${OPENRPORT_SERVER_PUBLIC_URL:-}}'
       NUXT_PUBLIC_AUTH_MODE: '${OPENRPORT_UI_AUTH_MODE:-both}'
-      UI_INTERNAL_PORT: '${UI_INTERNAL_PORT:-8083}'
+      UI_INTERNAL_PORT: '${UI_INTERNAL_PORT:-38103}'
       OPENRPORT_UI_BIND_ADDRESS: '${OPENRPORT_UI_BIND_ADDRESS:-${OPENRPORT_BIND_ADDRESS:-0.0.0.0}}'
     network_mode: host
     volumes:
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
     expose:
-      - "${UI_INTERNAL_PORT:-8083}"
+      - "${UI_INTERNAL_PORT:-38103}"
     healthcheck:
-      test: ["CMD-SHELL", "wget --tries=1 --timeout=5 -qO- http://localhost:${UI_INTERNAL_PORT:-8083}/ >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "wget --tries=1 --timeout=5 -qO- http://localhost:${UI_INTERNAL_PORT:-38103}/ >/dev/null 2>&1 || exit 1"]
       start_period: 30s
       interval: 30s
       retries: 5

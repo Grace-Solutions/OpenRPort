@@ -25,8 +25,8 @@ BINARIES_BASE="${OPENRPORT_BINARIES_BASE_PATH:-/binaries}"
 # host-side ports -- there is no publish/internal distinction.
 SERVER_API_INTERNAL_PORT="${SERVER_API_INTERNAL_PORT:-8080}"
 SERVER_CLIENT_INTERNAL_PORT="${SERVER_CLIENT_INTERNAL_PORT:-8081}"
-PAIRING_INTERNAL_PORT="${PAIRING_INTERNAL_PORT:-8082}"
-UI_INTERNAL_PORT="${UI_INTERNAL_PORT:-8083}"
+PAIRING_INTERNAL_PORT="${PAIRING_INTERNAL_PORT:-38102}"
+UI_INTERNAL_PORT="${UI_INTERNAL_PORT:-38103}"
 
 # Per-service bind addresses. Each falls back to OPENRPORT_BIND_ADDRESS,
 # which itself falls back to 0.0.0.0. On a VPS where nginx is collocated
@@ -42,7 +42,7 @@ PAIRING_BIND="${OPENRPORT_PAIRING_BIND_ADDRESS:-$BIND_DEFAULT}"
 # Tunnel port pool baked into rportd.conf [server]. used_ports is the pool
 # rportd allocates from for reverse tunnels; excluded_ports carves holes
 # inside that pool. Defaults match upstream rportd.
-TUNNEL_USED_PORTS="${OPENRPORT_TUNNEL_USED_PORTS:-20000-30000}"
+TUNNEL_USED_PORTS="${OPENRPORT_TUNNEL_USED_PORTS:-38200-38400}"
 TUNNEL_EXCLUDED_PORTS="${OPENRPORT_TUNNEL_EXCLUDED_PORTS:-1-1024}"
 
 # Convert comma-separated lists into TOML array form: 'a','b','c'

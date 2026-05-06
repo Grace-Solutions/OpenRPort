@@ -103,21 +103,6 @@
 											class="hover:opacity-80 px-6 py-3 text-sm text-white rounded inline-flex items-center duration-200 focus:outline-none bg-primary flex w-40 max-w-full items-center justify-center"
 											type="button"
 										><!----> Start </nuxt-link>
-										<div
-											class="mb-6 flex items-start md:absolute md:right-0 md:top-1/2 md:-trangray-y-1/2 md:transform"
-										>
-											<div class="flex h-5 items-center">
-												<input
-													id="showAnimation"
-													class="h-4 w-4 rounded border border-gray-300 bg-gray-50 focus:ring-0"
-													type="checkbox"
-												>
-											</div><label
-												class="ml-2 text-sm font-medium text-muted"
-												for="showAnimation"
-											> Don't
-												show animation after login </label>
-										</div>
 									</div>
 								</div>
 							</div>

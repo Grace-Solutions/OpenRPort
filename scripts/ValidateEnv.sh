@@ -107,14 +107,14 @@ check_port() {
     ok "$name=$val"
   fi
 }
-check_port "SERVER_API_INTERNAL_PORT"    "${SERVER_API_INTERNAL_PORT:-8080}"
-check_port "SERVER_API_PUBLISH_PORT"     "${SERVER_API_PUBLISH_PORT:-8080}"
-check_port "SERVER_CLIENT_INTERNAL_PORT" "${SERVER_CLIENT_INTERNAL_PORT:-8081}"
-check_port "SERVER_CLIENT_PUBLISH_PORT"  "${SERVER_CLIENT_PUBLISH_PORT:-8081}"
-check_port "PAIRING_INTERNAL_PORT"       "${PAIRING_INTERNAL_PORT:-8082}"
-check_port "PAIRING_PUBLISH_PORT"        "${PAIRING_PUBLISH_PORT:-8082}"
-check_port "UI_INTERNAL_PORT"            "${UI_INTERNAL_PORT:-8083}"
-check_port "UI_PUBLISH_PORT"             "${UI_PUBLISH_PORT:-8083}"
+check_port "SERVER_API_INTERNAL_PORT"    "${SERVER_API_INTERNAL_PORT:-38100}"
+check_port "SERVER_API_PUBLISH_PORT"     "${SERVER_API_PUBLISH_PORT:-38100}"
+check_port "SERVER_CLIENT_INTERNAL_PORT" "${SERVER_CLIENT_INTERNAL_PORT:-38101}"
+check_port "SERVER_CLIENT_PUBLISH_PORT"  "${SERVER_CLIENT_PUBLISH_PORT:-38101}"
+check_port "PAIRING_INTERNAL_PORT"       "${PAIRING_INTERNAL_PORT:-38102}"
+check_port "PAIRING_PUBLISH_PORT"        "${PAIRING_PUBLISH_PORT:-38102}"
+check_port "UI_INTERNAL_PORT"            "${UI_INTERNAL_PORT:-38103}"
+check_port "UI_PUBLISH_PORT"             "${UI_PUBLISH_PORT:-38103}"
 
 # ── Subpath: hosts must match ───────────────────────────────────────────────
 if [[ "$MODE" == "subpath" ]]; then

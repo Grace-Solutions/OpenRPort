@@ -52,6 +52,9 @@ export default defineNuxtConfig({
 			link: [
 
 			],
+			htmlAttrs: {
+				class: 'dark',
+			},
 			bodyAttrs: {
 				class: 'min-h-screen h-full bg-gray-50 dark:bg-gray-800',
 			},

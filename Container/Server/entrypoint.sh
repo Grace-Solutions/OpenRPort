@@ -24,7 +24,7 @@ else
   # Minimal fallback when no config is mounted - meant for emergency boot.
   API_PORT="${SERVER_API_INTERNAL_PORT:-8080}"
   CLIENT_PORT="${SERVER_CLIENT_INTERNAL_PORT:-8081}"
-  FALLBACK_PAIRING_URL="${PAIRING_URL_OVERRIDE:-http://Pairing:${PAIRING_INTERNAL_PORT:-8082}/pairing}"
+  FALLBACK_PAIRING_URL="${PAIRING_URL_OVERRIDE:-http://Pairing:${PAIRING_INTERNAL_PORT:-38102}/pairing}"
   FALLBACK_SERVER_URL="${SERVER_URL_OVERRIDE:-http://localhost:${CLIENT_PORT}}"
   cat > "$CONFIG_LIVE" <<CONF
 [server]
