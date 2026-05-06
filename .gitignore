@@ -1,0 +1,27 @@
+# Environment (never commit secrets)
+.env
+
+# Generated config (created by GenerateConfig.sh at runtime)
+Config/Server/rportd.conf
+Config/Pairing/config.toml
+Config/Ui/runtime.env
+
+# Docker build cache
+.docker/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/
+
+# Node / Nuxt (inside src/Ui – already in subtree .gitignore, belt-and-suspenders)
+src/Ui/.nuxt/
+src/Ui/.output/
+src/Ui/node_modules/
+
+# Go build artifacts
+src/Server/rportd
+src/Pairing/rport-pairing

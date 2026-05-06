@@ -1,0 +1,84 @@
+---
+# OpenRPort Unified – Docker Compose
+# All ports / paths / URLs are driven by .env
+# No reverse proxy baked in. Add your own or use as-is.
+
+services:
+  openrport-server:
+    build:
+      context: .
+      dockerfile: Container/Server/Dockerfile
+    container_name: openrport-server
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      OPENRPORT_DEPLOYMENT_MODE: ${OPENRPORT_DEPLOYMENT_MODE}
+      OPENRPORT_SERVER_PUBLIC_URL: ${OPENRPORT_SERVER_PUBLIC_URL}
+      OPENRPORT_SERVER_BASE_PATH: ${OPENRPORT_SERVER_BASE_PATH:-/}
+      OPENRPORT_AUTO_DISCOVER_PUBLIC_URL: ${OPENRPORT_AUTO_DISCOVER_PUBLIC_URL:-true}
+      OPENRPORT_TRUST_PROXY_HEADERS: ${OPENRPORT_TRUST_PROXY_HEADERS:-true}
+      OPENRPORT_PAIRING_PUBLIC_URL: ${OPENRPORT_PAIRING_PUBLIC_URL}
+      OPENRPORT_PAIRING_BASE_PATH: ${OPENRPORT_PAIRING_BASE_PATH:-/pairing}
+    volumes:
+      - ./Config/Server:/etc/rport
+      - openrport-data:/var/lib/rport
+    ports:
+      - "${OPENRPORT_SERVER_API_PORT:-8080}:8080"
+      - "${OPENRPORT_SERVER_CLIENT_PORT:-8081}:8081"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "--server-response", "http://localhost:8080/api/v1/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  openrport-pairing:
+    build:
+      context: .
+      dockerfile: Container/Pairing/Dockerfile
+    container_name: openrport-pairing
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      OPENRPORT_DEPLOYMENT_MODE: ${OPENRPORT_DEPLOYMENT_MODE}
+      OPENRPORT_PAIRING_PUBLIC_URL: ${OPENRPORT_PAIRING_PUBLIC_URL}
+      OPENRPORT_PAIRING_BASE_PATH: ${OPENRPORT_PAIRING_BASE_PATH:-/pairing}
+      OPENRPORT_AUTO_DISCOVER_PUBLIC_URL: ${OPENRPORT_AUTO_DISCOVER_PUBLIC_URL:-true}
+      OPENRPORT_TRUST_PROXY_HEADERS: ${OPENRPORT_TRUST_PROXY_HEADERS:-true}
+    volumes:
+      - ./Config/Pairing:/etc/rport-pairing
+    ports:
+      - "${OPENRPORT_PAIRING_PORT:-9978}:9978"
+    healthcheck:
+      # /update always returns a script – works as a health probe
+      test: ["CMD", "wget", "-qO-", "http://localhost:9978/update"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
+
+  openrport-ui:
+    build:
+      context: .
+      dockerfile: Container/Ui/Dockerfile
+    container_name: openrport-ui
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      NUXT_API_URL: ${NUXT_API_URL}
+      NUXT_APP_BASE_URL: ${NUXT_APP_BASE_URL:-/ui}
+      OPENRPORT_AUTO_DISCOVER_PUBLIC_URL: ${OPENRPORT_AUTO_DISCOVER_PUBLIC_URL:-true}
+    ports:
+      - "127.0.0.1:${OPENRPORT_UI_PORT:-3000}:3000"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  openrport-data:
