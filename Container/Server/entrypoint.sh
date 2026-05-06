@@ -1,65 +1,38 @@
 #!/usr/bin/env sh
 # Container/Server/entrypoint.sh
-# Resolves public URL from env or proxy headers, patches config, launches rportd.
+# Patches the runtime rportd config and launches rportd.
 set -eu
 
 CONFIG_SRC="/etc/rport/rportd.conf"
 CONFIG_LIVE="/tmp/rportd.runtime.conf"
 
-# ── URL resolution helper ──────────────────────────────────────────────────────
-# Priority: explicit env > header-derived > internal default
-resolve_server_url() {
-  if [ -n "${OPENRPORT_SERVER_PUBLIC_URL:-}" ]; then
-    echo "${OPENRPORT_SERVER_PUBLIC_URL}"
-    return
-  fi
-  # Headers are injected by the proxy at request time; for startup we use what's
-  # baked into the environment by the proxy or operator.
-  if [ "${OPENRPORT_AUTO_DISCOVER_PUBLIC_URL:-true}" = "true" ]; then
-    PROTO="${HTTP_X_FORWARDED_PROTO:-${HTTP_FORWARDED_PROTO:-http}}"
-    HOST="${HTTP_X_FORWARDED_HOST:-${HOSTNAME:-localhost}}"
-    PORT_PART="${HTTP_X_FORWARDED_PORT:-}"
-    PREFIX="${HTTP_X_FORWARDED_PREFIX:-${OPENRPORT_SERVER_BASE_PATH:-/}}"
-    if [ -n "$PORT_PART" ] && [ "$PORT_PART" != "80" ] && [ "$PORT_PART" != "443" ]; then
-      echo "${PROTO}://${HOST}:${PORT_PART}${PREFIX%/}"
-    else
-      echo "${PROTO}://${HOST}${PREFIX%/}"
-    fi
-    return
-  fi
-  echo "http://localhost:${OPENRPORT_SERVER_API_PORT:-8080}"
-}
-
-resolve_pairing_url() {
-  if [ -n "${OPENRPORT_PAIRING_PUBLIC_URL:-}" ]; then
-    echo "${OPENRPORT_PAIRING_PUBLIC_URL}"
-    return
-  fi
-  SERVER_URL="$(resolve_server_url)"
-  MODE="${OPENRPORT_DEPLOYMENT_MODE:-subpath}"
-  if [ "$MODE" = "subpath" ]; then
-    PAIRING_BASE="${OPENRPORT_PAIRING_BASE_PATH:-/pairing}"
-    echo "${SERVER_URL%/}${PAIRING_BASE}"
-  else
-    echo "http://openrport-pairing:${OPENRPORT_PAIRING_PORT:-9978}"
-  fi
-}
-
-PAIRING_URL="$(resolve_pairing_url)"
-echo "[entrypoint] pairing_url = ${PAIRING_URL}"
+# pairing_url override is only applied when an explicit env value is given.
+# X-Forwarded-* values are HTTP request headers, not startup environment
+# variables, and HOSTNAME inside Docker is the random container ID – not a
+# useful default. For everything else, keep the value baked into the mounted
+# config (rportd applies trust_proxy at request time for header discovery).
+PAIRING_URL_OVERRIDE="${OPENRPORT_PAIRING_PUBLIC_URL:-}"
+if [ -n "$PAIRING_URL_OVERRIDE" ]; then
+  echo "[entrypoint] pairing_url override = ${PAIRING_URL_OVERRIDE}"
+else
+  echo "[entrypoint] using pairing_url from config (no OPENRPORT_PAIRING_PUBLIC_URL set)"
+fi
 
 # ── Config preparation ─────────────────────────────────────────────────────────
 if [ -f "$CONFIG_SRC" ]; then
   cp "$CONFIG_SRC" "$CONFIG_LIVE"
-  # Patch pairing_url in the live config (sed in-place)
-  sed -i "s|pairing_url = \".*\"|pairing_url = \"${PAIRING_URL}\"|g" "$CONFIG_LIVE"
+  if [ -n "$PAIRING_URL_OVERRIDE" ]; then
+    sed -i "s|pairing_url = \".*\"|pairing_url = \"${PAIRING_URL_OVERRIDE}\"|g" "$CONFIG_LIVE"
+  fi
 else
-  # Minimal fallback config when no mount is provided
+  # Minimal fallback config when no mount is provided.
+  FALLBACK_PAIRING_URL="${PAIRING_URL_OVERRIDE:-http://openrport-pairing:${OPENRPORT_PAIRING_PORT:-9978}}"
   cat > "$CONFIG_LIVE" <<CONF
 [server]
 address = "0.0.0.0:8081"
 data_dir = "/var/lib/rport"
-pairing_url = "${PAIRING_URL}"
+pairing_url = "${FALLBACK_PAIRING_URL}"
+auth = "${RPORTD_CLIENT_AUTH:-clientauth1:1234}"
 
 [api]
 address = "0.0.0.0:8080"

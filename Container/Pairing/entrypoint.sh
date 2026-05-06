@@ -1,48 +1,35 @@
 #!/usr/bin/env sh
 # Container/Pairing/entrypoint.sh
-# Resolves the public pairing URL, writes config, launches rport-pairing.
+# Patches the runtime pairing config and launches rport-pairing.
 set -eu
 
 CONFIG_SRC="/etc/rport-pairing/config.toml"
 CONFIG_LIVE="/tmp/rport-pairing.runtime.toml"
 
-# ── Resolve public URL ─────────────────────────────────────────────────────────
-# Priority: explicit OPENRPORT_PAIRING_PUBLIC_URL > header-derived > fallback
-resolve_pairing_url() {
-  if [ -n "${OPENRPORT_PAIRING_PUBLIC_URL:-}" ]; then
-    echo "${OPENRPORT_PAIRING_PUBLIC_URL}"
-    return
-  fi
-  if [ "${OPENRPORT_AUTO_DISCOVER_PUBLIC_URL:-true}" = "true" ]; then
-    PROTO="${HTTP_X_FORWARDED_PROTO:-http}"
-    HOST="${HTTP_X_FORWARDED_HOST:-${HOSTNAME:-localhost}}"
-    PORT_PART="${HTTP_X_FORWARDED_PORT:-}"
-    PREFIX="${HTTP_X_FORWARDED_PREFIX:-${OPENRPORT_PAIRING_BASE_PATH:-/pairing}}"
-    if [ -n "$PORT_PART" ] && [ "$PORT_PART" != "80" ] && [ "$PORT_PART" != "443" ]; then
-      echo "${PROTO}://${HOST}:${PORT_PART}${PREFIX%/}"
-    else
-      echo "${PROTO}://${HOST}${PREFIX%/}"
-    fi
-    return
-  fi
-  echo "http://localhost:${OPENRPORT_PAIRING_PORT:-9978}"
-}
-
-PAIRING_URL="$(resolve_pairing_url)"
+# Only override the URL when an explicit env value is given. X-Forwarded-* are
+# request-time HTTP headers, not startup environment variables, and HOSTNAME
+# inside Docker is the random container ID.
+PAIRING_URL_OVERRIDE="${OPENRPORT_PAIRING_PUBLIC_URL:-}"
 PAIRING_BASE="${OPENRPORT_PAIRING_BASE_PATH:-/pairing}"
-echo "[entrypoint] pairing base_url = ${PAIRING_URL}"
+if [ -n "$PAIRING_URL_OVERRIDE" ]; then
+  echo "[entrypoint] pairing url override = ${PAIRING_URL_OVERRIDE}"
+else
+  echo "[entrypoint] using pairing url from config (no OPENRPORT_PAIRING_PUBLIC_URL set)"
+fi
 echo "[entrypoint] pairing base_path = ${PAIRING_BASE}"
 
 # ── Config preparation ─────────────────────────────────────────────────────────
 if [ -f "$CONFIG_SRC" ]; then
   cp "$CONFIG_SRC" "$CONFIG_LIVE"
-  # Patch the url in the live config (TOML: url = "...")
-  sed -i "s|url = \".*\"|url = \"${PAIRING_URL}\"|g" "$CONFIG_LIVE"
+  if [ -n "$PAIRING_URL_OVERRIDE" ]; then
+    sed -i "s|url = \".*\"|url = \"${PAIRING_URL_OVERRIDE}\"|g" "$CONFIG_LIVE"
+  fi
 else
+  FALLBACK_URL="${PAIRING_URL_OVERRIDE:-http://localhost:${OPENRPORT_PAIRING_PORT:-9978}}"
   cat > "$CONFIG_LIVE" <<CONF
 [server]
   address = "0.0.0.0:9978"
-  url = "${PAIRING_URL}"
+  url = "${FALLBACK_URL}"
 CONF
 fi
 

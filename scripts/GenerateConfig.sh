@@ -65,6 +65,7 @@ cat > "$RPORTD_CONF" <<EOF
 address = "0.0.0.0:8081"
 data_dir = "/var/lib/rport"
 pairing_url = "${PAIRING_URL}"
+auth = "${RPORTD_CLIENT_AUTH:-clientauth1:1234}"
 
 [api]
 address = "0.0.0.0:8080"

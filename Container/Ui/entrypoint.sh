@@ -4,33 +4,20 @@
 # and launches the Nuxt server.
 set -eu
 
-# ── Resolve API URL ────────────────────────────────────────────────────────────
-# Priority: explicit NUXT_API_URL > header-derived > internal service name
-resolve_api_url() {
-  if [ -n "${NUXT_API_URL:-}" ]; then
-    echo "${NUXT_API_URL}"
-    return
-  fi
-  if [ "${OPENRPORT_AUTO_DISCOVER_PUBLIC_URL:-true}" = "true" ]; then
-    PROTO="${HTTP_X_FORWARDED_PROTO:-http}"
-    HOST="${HTTP_X_FORWARDED_HOST:-${HOSTNAME:-localhost}}"
-    PORT_PART="${HTTP_X_FORWARDED_PORT:-}"
-    SERVER_BASE="${OPENRPORT_SERVER_BASE_PATH:-/}"
-    if [ -n "$PORT_PART" ] && [ "$PORT_PART" != "80" ] && [ "$PORT_PART" != "443" ]; then
-      echo "${PROTO}://${HOST}:${PORT_PART}${SERVER_BASE%/}"
-    else
-      echo "${PROTO}://${HOST}${SERVER_BASE%/}"
-    fi
-    return
-  fi
-  # Internal fallback
-  echo "http://openrport-server:${OPENRPORT_SERVER_API_PORT:-8080}"
-}
+# Priority: explicit NUXT_API_URL > internal service-name fallback.
+# HOSTNAME-based auto-discovery is not used: HOSTNAME inside Docker is the
+# random container ID, and X-Forwarded-* are HTTP request headers, not
+# startup environment variables. Set NUXT_API_URL explicitly when running
+# behind a reverse proxy.
+if [ -n "${NUXT_API_URL:-}" ]; then
+  RESOLVED_API_URL="${NUXT_API_URL}"
+else
+  RESOLVED_API_URL="http://openrport-server:${OPENRPORT_SERVER_API_PORT:-8080}"
+fi
 
-RESOLVED_API_URL="$(resolve_api_url)"
 export NUXT_API_URL="${RESOLVED_API_URL}"
 # NUXT_PUBLIC_API_URL overrides runtimeConfig.public.apiUrl in the Nitro server
-# This allows the SPA to receive the correct URL even in different deployment modes
+# so the SPA receives the correct URL across deployment modes.
 export NUXT_PUBLIC_API_URL="${NUXT_PUBLIC_API_URL:-${RESOLVED_API_URL}}"
 export NUXT_APP_BASE_URL="${NUXT_APP_BASE_URL:-/ui}"
 
