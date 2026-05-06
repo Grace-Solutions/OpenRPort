@@ -17,14 +17,24 @@ export const useInstaller = () => {
 		connect_url: string;
 		fingerprint: string;
 		password: string;
+		tags?: string[];
 	}, pairingUrl: string) {
 		isLoading.value = true;
 		error.value = null;
 
 		try {
+			const body: Record<string, unknown> = {
+				client_id: params.client_id,
+				connect_url: params.connect_url,
+				fingerprint: params.fingerprint,
+				password: params.password,
+			};
+			if (params.tags && params.tags.length > 0) {
+				body.tags = params.tags;
+			}
 			const response = await $fetch<InstallerResponse>(pairingUrl, {
 				method: 'POST',
-				body: params,
+				body,
 			});
 
 			Object.assign(installers, {

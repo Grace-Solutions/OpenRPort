@@ -283,6 +283,10 @@
 			ref="addClientModal"
 			@save="handleCreateClientAccess"
 		/>
+		<InstallClientModal
+			ref="installClientModal"
+			@save="closeInstallClientModal"
+		/>
 	</nav>
 </template>
 
@@ -294,6 +298,7 @@ import {
 import { useLocalStorage } from '@vueuse/core';
 import Accordion from './Accordion.vue';
 import AddClientModal from '~/components/clients/AddClientModal.vue';
+import InstallClientModal from '~/components/clients/InstallClientModal.vue';
 
 const props = defineProps({
 	accordionItems: Array,
@@ -307,7 +312,9 @@ const isClientSettingOpen = ref(false);
 const selectedSettingOpt = useLocalStorage('dashboard_nav_drawer_item_lines', 1);
 const isFilterModalOpen = ref(false);
 const addClientModal = ref<InstanceType<typeof AddClientModal> | null>(null);
+const installClientModal = ref<InstanceType<typeof InstallClientModal> | null>(null);
 const { createClientAccess } = useClientAccess();
+const statusStore = useStatusStore();
 
 const openFilter = () => {
 	isFilterModalOpen.value = true;
@@ -321,9 +328,21 @@ const closeAddClientModal = () => {
 	addClientModal.value?.close();
 };
 
+const closeInstallClientModal = () => {
+	installClientModal.value?.close();
+};
+
 const handleCreateClientAccess = async (data) => {
 	await createClientAccess(data);
 	closeAddClientModal();
+	if (!statusStore.status?.pairing_url) {
+		await statusStore.loadStatus();
+	}
+	await installClientModal.value?.open(
+		{ id: data.id, password: data.password },
+		statusStore.status,
+		data.tags ?? [],
+	);
 };
 const toggleClientSetting = () => {
 	isClientSettingOpen.value = !isClientSettingOpen.value;

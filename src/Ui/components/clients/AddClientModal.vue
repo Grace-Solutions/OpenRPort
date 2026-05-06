@@ -98,6 +98,25 @@
 				The ID and the password are case-sensitive.
 			</div>
 		</div>
+		<div class="flex flex-col mt-4">
+			<div class="relative mt-1 flex w-full flex-col">
+				<input
+					v-model="tagsInput"
+					class="primary input-text focus:border-1 peer order-2 block h-10 w-full rounded bg-transparent text-theme-inverted shadow-sm focus:outline-0 focus:ring-0 sm:text-sm"
+					placeholder=" "
+					type="text"
+					autocomplete="off"
+				>
+				<label
+					class="order-1 flex pb-1 pl-1 text-theme-label peer-focus:text-primary text-sm font-normal"
+				>Tags (optional)</label>
+			</div>
+			<div class="caption mb-2 mt-1 px-3 text-[10.5px] tracking-[0.35px] text-theme-inverted text-opacity-80">
+				Comma-separated. The pairing service writes them into the agent's
+				<code>client_attributes.json</code> at install time so the server can
+				target this device.
+			</div>
+		</div>
 	</Modal>
 </template>
 
@@ -112,6 +131,7 @@ const client = ref({
 	id: '',
 	password: randomSanitizedPassword(15),
 });
+const tagsInput = ref('');
 
 const errors = reactive({
 	id: '',
@@ -127,13 +147,16 @@ const open = () => {
 	isOpen.value = true;
 };
 
+const parseTags = (raw: string): string[] =>
+	raw.split(',').map(t => t.trim()).filter(t => t.length > 0);
+
 const save = async () => {
 	validateId();
 	validatePassword();
 
 	if (!errors.id && !errors.password) {
 		if (await showClientAccess(client.value)) {
-			emit('save', client.value);
+			emit('save', { ...client.value, tags: parseTags(tagsInput.value) });
 		}
 	}
 };

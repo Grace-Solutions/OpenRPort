@@ -206,6 +206,7 @@ const isOpen = ref(false);
 const client = ref<Partial<ClientAuth> | null>(null);
 const status = ref(null);
 const selectedConnectUrl = ref('');
+const tags = ref<string[]>([]);
 
 const { isLoading, error, installers, fetchInstaller } = useInstaller();
 
@@ -218,11 +219,13 @@ const close = () => {
 	client.value = null;
 	status.value = null;
 	selectedConnectUrl.value = '';
+	tags.value = [];
 };
-const open = async (clientAccess?: Partial<ClientAuth>, statusServer) => {
+const open = async (clientAccess?: Partial<ClientAuth>, statusServer, clientTags: string[] = []) => {
 	isOpen.value = true;
 	client.value = clientAccess;
 	status.value = statusServer;
+	tags.value = clientTags;
 	if (statusServer.connect_url.length > 0) {
 		selectedConnectUrl.value = statusServer.connect_url[0];
 		await updateInstaller();
@@ -269,6 +272,7 @@ async function updateInstaller() {
 		connect_url: selectedConnectUrl.value,
 		fingerprint: status?.value?.fingerprint as string,
 		password: client.value.password ?? '',
+		tags: tags.value,
 	}, status?.value?.pairing_url as string);
 }
 

@@ -418,6 +418,11 @@ const handleCreateClientAccess = async (data) => {
 	await createClientAccess(data);
 	closeAddClientModal();
 	await refresh();
+	await installClientModal.value?.open(
+		{ id: data.id, password: data.password },
+		statusStore.status,
+		data.tags ?? [],
+	);
 };
 
 const deleteClientAccess = async (client_auth_id: string) => {
