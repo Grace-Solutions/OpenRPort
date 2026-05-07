@@ -53,15 +53,21 @@ jobs:
             image_name: gsoperator/openrport-server
             dockerfile: Container/Server/Dockerfile
             build_args: ''
+            readme: Container/Server/README.docker.md
+            short_description: 'OpenRPort server (rportd): API, chisel control plane, reverse-tunnel pool'
           - service: pairing
             image_name: gsoperator/openrport-pairing
             dockerfile: Container/Pairing/Dockerfile
             build_args: ''
+            readme: Container/Pairing/README.docker.md
+            short_description: 'OpenRPort pairing service: agent installer URLs and binary mirror'
           - service: ui
             image_name: gsoperator/openrport-ui
             dockerfile: Container/Ui/Dockerfile
             build_args: |
               NUXT_APP_BASE_URL=/ui
+            readme: Container/Ui/README.docker.md
+            short_description: 'OpenRPort management UI (Nuxt 3) for rportd'
 
     steps:
       - name: Checkout
@@ -115,3 +121,18 @@ jobs:
 
       - name: Image digest
         run: echo "Pushed ${{ matrix.image_name }} with tags - ${{ steps.meta.outputs.tags }}"
+
+      # Sync the per-image README and short description to Docker Hub. Only
+      # runs on main-branch pushes so PR builds and version-tag pushes don't
+      # overwrite the published description out-of-band. The action calls the
+      # Docker Hub web API (not the registry API) and authenticates with the
+      # same DOCKERHUB_TOKEN PAT used to push images.
+      - name: Sync README to Docker Hub
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: peter-evans/dockerhub-description@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: ${{ matrix.image_name }}
+          short-description: ${{ matrix.short_description }}
+          readme-filepath: ${{ matrix.readme }}
