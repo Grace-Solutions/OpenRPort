@@ -166,116 +166,158 @@ plane), and how an operator reaches a service running behind that agent
 ### 1. Onboarding and agent control channel
 
 ```
-   ┌───────────────────────┐                         ┌──────────────────────────┐
-   │ Operator browser      │ 1. open UI / create     │ Edge firewall + reverse  │
-   │ 198.51.100.10         │    pairing code         │ proxy (nginx/Traefik)    │
-   │                       │ ───────────────────────▶│ 203.0.113.20  :443       │
-   └───────────────────────┘                         └────────────┬─────────────┘
-                                                                  │ TLS-terminated,
-                                                                  │ then HTTP to:
-                                                                  ▼
-                                                  ┌──────────────────────────────┐
-                                                  │ OpenRPort stack host         │
-                                                  │ 10.0.0.5  (network_mode: host│
-                                                  │   :38100 API, :38101 chisel, │
-                                                  │   :38102 Pairing, :38103 UI, │
-                                                  │   :38200-38400 tunnel pool)  │
-                                                  └────────────┬─────────────────┘
-                                                               │
-   ┌───────────────────────┐                                   │
-   │ Target host (agent)   │ 2. curl https://rport.example.com/pairing/<code>|sh
-   │ 192.0.2.50            │ ─────────────────────────────────▶│  Pairing renders
-   │ behind NAT, no inbound│                                   │  installer with
-   │                       │ 3. installer downloads agent     │  CONNECT_URL +
-   │                       │    binary (server or S3 mirror) ─▶  BINARIES_BASE_URL
-   │                       │ 4. agent dials chisel WS to       │
-   │                       │    OPENRPORT_SERVER_PUBLIC_URL ──▶│  rportd  :38101
-   │                       │◀──── persistent control channel ──┤  (out-of-band:
-   │                       │                                   │   no inbound
-   │                       │                                   │   firewall on
-   │                       │                                   │   agent side)
-   └───────────────────────┘                                   └──────────────────┘
+                                   PUBLIC INTERNET
+   ┌────────────────────────────┐                      ┌────────────────────────────┐
+   │ Operator browser           │                      │ Target host (agent)        │
+   │ 198.51.100.10              │                      │ 192.0.2.50                 │
+   │ opens https://rport.example│                      │ behind NAT, only outbound  │
+   │ .com/ui/                   │                      │ 443 allowed                │
+   └──────────────┬─────────────┘                      └──────────────┬─────────────┘
+                  │ HTTPS :443                                        │ HTTPS :443
+                  ▼                                                   ▼
+   ╔══════════════════════════════════════════════════════════════════════════════╗
+   ║  Edge firewall                                            203.0.113.20       ║
+   ║  inbound allow:  tcp/443 (operators + agents)                                ║
+   ║                  tcp/38200-38400 (tunnel pool, raw TCP, see diagram 2)       ║
+   ║  DNAT:           tcp/443           -> 10.0.0.5:443                           ║
+   ║                  tcp/38200-38400   -> 10.0.0.5:38200-38400                   ║
+   ╚══════════════════════════════════════════════════════════════════════════════╝
+                  │
+                  ▼
+   ╔══════════════════════════════════════════════════════════════════════════════╗
+   ║  Reverse proxy (nginx / Traefik / Caddy)              10.0.0.5:443           ║
+   ║  TLS termination for rport.example.com, then HTTP upstream:                  ║
+   ║    /api/      -> 127.0.0.1:38100   (rportd API)                              ║
+   ║    /ui/       -> 127.0.0.1:38103   (Nuxt UI)                                 ║
+   ║    /pairing/  -> 127.0.0.1:38102   (rport-pairing)                           ║
+   ║    /binaries/ -> 127.0.0.1:38102   (rport-pairing /binaries)                 ║
+   ║    /          -> 127.0.0.1:38101   (chisel WS, catch-all, Upgrade headers)   ║
+   ╚══════════════════════════════════════════════════════════════════════════════╝
+                  │
+                  ▼
+   ╔══════════════════════════════════════════════════════════════════════════════╗
+   ║  Linux VM (Docker host)                               10.0.0.5               ║
+   ║  ┌──────────────────────────────────────────────────────────────────────┐    ║
+   ║  │ docker compose stack  (network_mode: host - shares the VM netns)     │    ║
+   ║  │  ┌─────────────────────┐ ┌─────────────────────┐ ┌────────────────┐  │    ║
+   ║  │  │ openrport/server    │ │ openrport/pairing   │ │ openrport/ui   │  │    ║
+   ║  │  │ rportd              │ │ rport-pairing       │ │ Nuxt SSR       │  │    ║
+   ║  │  │  :38100 API         │ │  :38102 HTTP        │ │  :38103 HTTP   │  │    ║
+   ║  │  │  :38101 chisel WS   │ │   /pairing/<code>   │ │                │  │    ║
+   ║  │  │  :38200-38400 pool  │ │   /binaries/...     │ │                │  │    ║
+   ║  │  └─────────────────────┘ └─────────────────────┘ └────────────────┘  │    ║
+   ║  └──────────────────────────────────────────────────────────────────────┘    ║
+   ╚══════════════════════════════════════════════════════════════════════════════╝
+
+   Onboarding sequence:
+   ① Operator clicks "Add client" in UI → rportd creates a deposit:
+       deposit.ConnectUrl = OPENRPORT_SERVER_PUBLIC_URL (https://rport.example.com)
+   ② Operator runs on the target:
+       curl -s https://rport.example.com/pairing/<7-char-code> | sh
+   ③ Pairing renders installer_vars.sh with
+       CONNECT_URL=https://rport.example.com
+       BINARIES_BASE_URL=<OPENRPORT_BINARIES_PUBLIC_URL>     (see diagram 3)
+   ④ Installer downloads the agent binary, then the agent dials
+       wss://rport.example.com  -- outbound only, traverses agent NAT,
+       hits the edge firewall, proxy upgrades to chisel, control channel
+       is now open and persistent.
 ```
 
-The agent only needs **outbound 443** (or whichever port
-`OPENRPORT_SERVER_PUBLIC_URL` resolves to). Everything else rides on
-that single chisel WebSocket.
+The agent only needs **outbound** to `OPENRPORT_SERVER_PUBLIC_URL`
+(typically `:443`). No inbound firewall change is ever required on the
+agent host. Everything else rides on that single chisel WebSocket.
 
 ### 2. Reverse-tunnel data path (operator → service behind agent)
 
 ```
-                              tunnel pool port (raw TCP, bypasses proxy)
-                              ┌──────────────────────────────────────────┐
-                              │                                          ▼
-   ┌───────────────────────┐  │  ┌──────────────────────────────┐  ┌──────────────┐
-   │ Operator              │──┘  │ Stack host  10.0.0.5         │  │ rportd       │
-   │ 198.51.100.10         │     │ tunnels.rport.example.com    │──│ 0.0.0.0:38250│
-   │  rdp / ssh / browser /│────▶│   :38250  (allocated from    │  │ (allocated)  │
-   │  curl  to             │     │   OPENRPORT_TUNNEL_USED_PORTS)  └──────┬───────┘
-   │  tunnels.rport....    │     └──────────────────────────────┘         │
-   │     :38250            │                                              │ multiplexed
-   └───────────────────────┘                                              │ over the
-                                                                          ▼ existing chisel WS
-                                                       ┌──────────────────────────┐
-                                                       │ Agent  192.0.2.50        │
-                                                       │  rport client            │
-                                                       │  forwards 38250 →        │
-                                                       │  127.0.0.1:<svc>         │
-                                                       └────────────┬─────────────┘
-                                                                    ▼
-                                                  ┌──────────────────────────────────┐
-                                                  │ Local service on the agent host  │
-                                                  │   :3389  RDP                     │
-                                                  │   :22    SSH                     │
-                                                  │   :80    intranet web            │
-                                                  │   :5432  Postgres (TCP)          │
-                                                  │   :161   SNMP (UDP)              │
-                                                  └──────────────────────────────────┘
+                                   PUBLIC INTERNET
+   ┌────────────────────────────┐
+   │ Operator                   │
+   │ 198.51.100.10              │
+   │ rdp / ssh / browser / curl │
+   │ to tunnels.rport.example   │
+   │ .com:38250                 │
+   └──────────────┬─────────────┘
+                  │ raw TCP/UDP :38250  (NOT proxied - L7 proxies cannot forward this)
+                  ▼
+   ╔══════════════════════════════════════════════════════════════════════════════╗
+   ║  Edge firewall                                            203.0.113.20       ║
+   ║  inbound allow:  tcp+udp/38200-38400  (entire OPENRPORT_TUNNEL_USED_PORTS)   ║
+   ║  DNAT:           tcp+udp/38250  -> 10.0.0.5:38250  (BYPASSES the proxy)     ║
+   ║  DNS:  tunnels.rport.example.com  ->  203.0.113.20  (= OPENRPORT_TUNNEL_HOST)║
+   ╚══════════════════════════════════════════════════════════════════════════════╝
+                  │
+                  ▼
+   ╔══════════════════════════════════════════════════════════════════════════════╗
+   ║  Linux VM (Docker host)                               10.0.0.5               ║
+   ║  ┌──────────────────────────────────────────────────────────────────────┐    ║
+   ║  │ openrport/server  container  (network_mode: host)                    │    ║
+   ║  │   rportd                                                             │    ║
+   ║  │     :38101  chisel WS  ← persistent control channel from agent       │    ║
+   ║  │     :38250  pool port  ← allocated from OPENRPORT_TUNNEL_USED_PORTS  │    ║
+   ║  │              when the operator created the tunnel; rportd then       │    ║
+   ║  │              multiplexes it over the existing chisel WS to the agent│    ║
+   ║  └──────────────────────────────────────────────────────────────────────┘    ║
+   ╚══════════════════════════════════════════════════════════════════════════════╝
+                  │ multiplexed inside the existing chisel WebSocket
+                  │ (agent's outbound 443 connection - no new inbound on agent)
+                  ▼
+   ╔══════════════════════════════════════════════════════════════════════════════╗
+   ║  Linux/Windows VM (target host - the agent)           192.0.2.50             ║
+   ║    rport client receives the multiplexed stream and forwards it to:          ║
+   ║      127.0.0.1:3389   RDP                                                    ║
+   ║      127.0.0.1:22     SSH                                                    ║
+   ║      127.0.0.1:80     intranet web service                                   ║
+   ║      127.0.0.1:5432   Postgres (raw TCP)                                     ║
+   ║      127.0.0.1:161    SNMP (UDP)                                             ║
+   ╚══════════════════════════════════════════════════════════════════════════════╝
 ```
 
-What the operator sees in the UI: `tunnels.rport.example.com:38250` (or
-whatever `OPENRPORT_TUNNEL_HOST` resolves to, falling back to the API
-host). The TCP/UDP connection lands on rportd's allocated pool port,
-gets multiplexed onto the agent's existing chisel WebSocket, and the
-agent forwards it to the chosen `127.0.0.1:<port>` on its loopback —
-no inbound firewall change on the agent side.
+What the operator sees in the UI: `tunnels.rport.example.com:38250` (the
+host part comes from `OPENRPORT_TUNNEL_HOST`, falling back to the API
+host when blank). The connection lands on rportd's allocated pool port,
+is multiplexed onto the agent's existing chisel WebSocket, and the agent
+forwards it to the chosen `127.0.0.1:<port>` on its loopback — no
+inbound firewall change on the agent side.
 
-### 3. Agent binary delivery (server-hosted vs. S3 mirror)
+### 3. Agent binary delivery (server-hosted vs. S3 / CDN mirror)
 
 ```
-                         ┌──────────────────────────────────────────┐
-                         │ Pairing service renders installer with    │
-                         │   BINARIES_BASE_URL = OPENRPORT_BINARIES_PUBLIC_URL
-                         └──────────────────────────────────────────┘
-                                  │
-              ┌───────────────────┴────────────────────┐
-              ▼                                        ▼
-    DEFAULT (server-hosted)                   OPTIONAL (S3 / CDN mirror)
-    ┌─────────────────────────────┐           ┌─────────────────────────────┐
-    │ OPENRPORT_BINARIES_PUBLIC_  │           │ OPENRPORT_BINARIES_PUBLIC_  │
-    │   URL=https://rport...      │           │   URL=https://cdn.example...│
-    │   /binaries                 │           │   /openrport/binaries       │
-    │                             │           │                             │
-    │ Pairing serves the files    │           │ Bucket holds the same       │
-    │ bind-mounted from           │           │ layout (rport_<os>_<arch>   │
-    │ Data/OpenRPort/Binaries/    │           │ + checksum). No traffic     │
-    │ via [downloads] in          │           │ hits the stack for the      │
-    │ config.toml.                │           │ binary download itself.     │
-    └─────────────────────────────┘           └─────────────────────────────┘
-              │                                        │
-              └────────────────────┬───────────────────┘
-                                   ▼
-                       Agent installer fetches:
+   ┌──────────────────────────────────────────────────────────────────────────────┐
+   │ Pairing service renders installer_vars.sh / vars.ps1 with:                   │
+   │   BINARIES_BASE_URL = OPENRPORT_BINARIES_PUBLIC_URL                          │
+   └──────────────────────────────────────────────────────────────────────────────┘
+                            │                                  │
+            DEFAULT (server-hosted)                  OPTIONAL (S3 / CDN mirror)
+                            ▼                                  ▼
+   ╔══════════════════════════════════════╗   ╔════════════════════════════════════════╗
+   ║ Linux VM (Docker host)  10.0.0.5     ║   ║ Object store / CDN                     ║
+   ║  openrport/pairing container          ║   ║ https://cdn.example.com/openrport      ║
+   ║   serves /binaries/* from             ║   ║   /binaries/                           ║
+   ║   bind-mounted Data/OpenRPort/        ║   ║                                        ║
+   ║   Binaries/  via config.toml          ║   ║ Holds the same layout as the bind     ║
+   ║   [downloads] block                   ║   ║ mount: rport_<os>_<arch>.tar.gz +     ║
+   ║                                       ║   ║ matching .sha256 sidecars              ║
+   ║ OPENRPORT_BINARIES_PUBLIC_URL =       ║   ║ OPENRPORT_BINARIES_PUBLIC_URL =        ║
+   ║   https://rport.example.com/binaries  ║   ║   https://cdn.example.com/openrport    ║
+   ║                                       ║   ║   /binaries                            ║
+   ╚══════════════════════════════════════╝   ╚════════════════════════════════════════╝
+                            │                                  │
+                            └──────────────────┬───────────────┘
+                                               ▼
+                       Agent installer (running on 192.0.2.50) fetches:
                          <BINARIES_BASE_URL>/rport_<os>_<arch>.tar.gz
                          <BINARIES_BASE_URL>/rport_<os>_<arch>.sha256
 ```
 
 To switch to an S3/CDN mirror: upload the contents of
-`Data/OpenRPort/Binaries/` to your bucket (preserving the filenames /
-checksum sidecars) and point `OPENRPORT_BINARIES_PUBLIC_URL` at the
-public base URL. Pairing-rendered installers will fetch from there
-instead of the stack — useful when agents are far from the server or
-when you want to keep the stack off the binary-download hot path.
+`Data/OpenRPort/Binaries/` to your bucket (preserving the filenames and
+`.sha256` sidecars) and point `OPENRPORT_BINARIES_PUBLIC_URL` at the
+public base URL — for example
+`https://cdn.example.com/openrport/binaries`. Pairing-rendered
+installers will fetch from there instead of the stack, which is useful
+when agents are far from the server or when you want to keep the stack
+off the binary-download hot path.
 
 ## Deployment scenarios
 
