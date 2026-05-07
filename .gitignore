@@ -32,3 +32,8 @@ src/Ui/node_modules/
 # Go build artifacts
 src/Server/rportd
 src/Pairing/rport-pairing
+
+# Go test runtime outputs (produced by `go test` in these subtrees;
+# see integration_test.go / runner_test.go / test_app/test_app.go).
+src/Server/server/notifications/out.json
+src/Server/server/notifications/channels/scriptRunner/out.json
