@@ -49,16 +49,22 @@ jobs:
       - name: Show docker compose version
         run: docker compose version
 
+      # The services in compose.yaml declare `env_file: - .env` which must
+      # physically exist on disk regardless of the --env-file flag. Seed
+      # it from .env.example so the CI runner can parse the file.
+      - name: Seed .env from .env.example
+        run: cp .env.example .env
+
       - name: Validate runtime compose (compose.yaml only)
-        run: docker compose --env-file .env.example config -q
+        run: docker compose config -q
 
       - name: Validate build override (compose.yaml + compose.build.yaml)
-        run: docker compose --env-file .env.example -f compose.yaml -f compose.build.yaml config -q
+        run: docker compose -f compose.yaml -f compose.build.yaml config -q
 
       - name: Verify image variables resolve to the documented defaults
         run: |
           set -e
-          out=$(docker compose --env-file .env.example config | grep -E '^[[:space:]]*image:')
+          out=$(docker compose config | grep -E '^[[:space:]]*image:')
           echo "$out"
           echo "$out" | grep -q 'gsoperator/openrport-server:latest'
           echo "$out" | grep -q 'gsoperator/openrport-pairing:latest'
@@ -72,7 +78,7 @@ jobs:
           OPENRPORT_IMAGE_TAG: v1.2.3
         run: |
           set -e
-          out=$(docker compose --env-file .env.example config | grep -E '^[[:space:]]*image:')
+          out=$(docker compose config | grep -E '^[[:space:]]*image:')
           echo "$out"
           echo "$out" | grep -q 'ghcr.io/grace-solutions/openrport-server:v1.2.3'
           echo "$out" | grep -q 'ghcr.io/grace-solutions/openrport-pairing:v1.2.3'
