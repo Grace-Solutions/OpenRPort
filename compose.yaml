@@ -19,6 +19,19 @@
 #   4. Point your edge reverse proxy at the host ports below
 #      and use examples/nginx.sample.conf as a starting point.
 #
+# EXAMPLE DEPLOYMENT (pre-filled in .env.example and the proxy samples):
+#   rport.example.com         -> 203.0.113.20 (public)
+#   tunnels.rport.example.com -> 203.0.113.20 (public, tunnel pool DNAT)
+#   Edge proxy host           -> 10.0.0.4
+#   Stack VM (this compose)   -> 10.0.0.5
+#   Edge firewall DNAT        :  tcp/443             -> 10.0.0.4:443
+#                                tcp+udp/38200-38400 -> 10.0.0.5:38200-*
+#   Sample edge configs       :  examples/{nginx,Caddyfile,haproxy}.sample.*
+#   Topology diagrams         :  README.md "Connection flow" section
+#
+#   Replace 'rport.example.com' / '10.0.0.5' / '10.0.0.4' / '203.0.113.20'
+#   with your own DNS names and addresses everywhere they appear.
+#
 # IMAGES:
 #   This file is runtime-only -- it just references images by name. The
 #   three services are pulled from a Docker registry; no local build is
