@@ -56,6 +56,13 @@ import (
 // -ldflags "-X main.pluginVersion=..." at build time.
 var pluginVersion = "openrport-oidc-plugin/0.1.0"
 
+// main is a stub required for `go build ./...` to succeed on a `package main`
+// program. Go's plugin loader never calls it; rportd invokes the exported
+// Init*CapabilityEx symbols directly via plugin.Lookup. Keeping the stub here
+// means the same source can be built with `-buildmode=plugin` (Dockerfile)
+// and as part of the regular module build / `go test ./...` matrix.
+func main() {}
+
 // StartPluginEx is the rportd entry point invoked once at plugin load time.
 // We don't need any global setup; OIDC discovery is lazy.
 func StartPluginEx(_ context.Context, _ *license.Config, l *logger.Logger) error {

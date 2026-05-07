@@ -84,7 +84,6 @@ require (
 )
 
 require (
-	github.com/coreos/go-oidc/v3 v3.10.0 // indirect
 	github.com/go-jose/go-jose/v4 v4.0.1 // indirect
 	github.com/pelletier/go-toml/v2 v2.1.0 // indirect
 	github.com/sagikazarmark/locafero v0.3.0 // indirect
@@ -92,10 +91,13 @@ require (
 	github.com/sourcegraph/conc v0.3.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/exp v0.0.0-20231110203233-9a3e6036ecaa // indirect
-	golang.org/x/oauth2 v0.20.0 // indirect
 )
 
-require go.etcd.io/bbolt v1.3.7
+require (
+	github.com/coreos/go-oidc/v3 v3.10.0
+	go.etcd.io/bbolt v1.3.7
+	golang.org/x/oauth2 v0.20.0
+)
 
 require (
 	github.com/andrew-d/go-termutil v0.0.0-20150726205930-009166a695a2 // indirect
