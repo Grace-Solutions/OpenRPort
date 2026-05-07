@@ -37,10 +37,13 @@ RUN CGO_ENABLED=1 go build \
 # ── Stage 2: Runtime ──────────────────────────────────────────────────────────
 FROM debian:bookworm-slim AS runtime
 
-# Runtime deps: ca-certificates for TLS, wget for healthcheck
+# Runtime deps: ca-certificates for TLS, wget for healthcheck,
+# curl + jq for OIDC discovery in entrypoint.sh when no config is mounted.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     wget \
+    curl \
+    jq \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user and data directories
