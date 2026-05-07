@@ -495,23 +495,38 @@ specific surface per deployment with `OPENRPORT_UI_AUTH_MODE`
 
 ## Container images
 
+Repository: <https://github.com/Grace-Solutions/OpenRPort>
+
 The three services are published to Docker Hub:
 
 | Repository | Tags |
 |---|---|
-| `gsoperator/openrport-server` | `latest`, `<short-sha>`, `<semver>` |
-| `gsoperator/openrport-pairing` | `latest`, `<short-sha>`, `<semver>` |
-| `gsoperator/openrport-ui` | `latest`, `<short-sha>`, `<semver>` |
+| [`gsoperator/openrport-server`](https://hub.docker.com/r/gsoperator/openrport-server) | `latest`, `<short-sha>`, `<semver>` |
+| [`gsoperator/openrport-pairing`](https://hub.docker.com/r/gsoperator/openrport-pairing) | `latest`, `<short-sha>`, `<semver>` |
+| [`gsoperator/openrport-ui`](https://hub.docker.com/r/gsoperator/openrport-ui) | `latest`, `<short-sha>`, `<semver>` |
 
-Both the namespace and the tag are parameterized in `compose.yaml`:
+Each service has its own fully-qualified image variable in `compose.yaml`,
+so any of them can be swapped independently (custom UI fork, private
+server build, stock upstream pairing) without touching the others:
 
 ```
-${OPENRPORT_IMAGE_NAMESPACE:-gsoperator}/openrport-{server,pairing,ui}:${OPENRPORT_IMAGE_TAG:-latest}
+${OPENRPORT_SERVER_IMAGE:-gsoperator/openrport-server}:${OPENRPORT_IMAGE_TAG:-latest}
+${OPENRPORT_PAIRING_IMAGE:-gsoperator/openrport-pairing}:${OPENRPORT_IMAGE_TAG:-latest}
+${OPENRPORT_UI_IMAGE:-gsoperator/openrport-ui}:${OPENRPORT_IMAGE_TAG:-latest}
 ```
 
-Override either in `.env` to publish/pull from a different registry (e.g.
-`OPENRPORT_IMAGE_NAMESPACE=ghcr.io/grace-solutions`) or to pin a
-reproducible deploy (`OPENRPORT_IMAGE_TAG=dba6908`).
+The image variable holds the full registry path (host + namespace +
+repository); valid values include:
+
+| Value | Source |
+|---|---|
+| `gsoperator/openrport-server` | Docker Hub (this fork) |
+| `ghcr.io/grace-solutions/openrport-server` | GHCR mirror |
+| `localhost:5000/openrport-server` | Local dev registry |
+| `my-registry.internal/openrport/server` | Private mirror |
+
+Override in `.env` to point at a different registry or to pin
+`OPENRPORT_IMAGE_TAG` to a short commit SHA for a reproducible deploy.
 
 ### Compose layout
 
@@ -529,28 +544,30 @@ make build-up # build locally + up (no registry pull)
 
 ### CI/CD
 
-`.github/workflows/docker-publish.yml` builds and pushes all three images
-on every push to `main`, on version tags (`v*`), and on manual
-`workflow_dispatch` runs.
+Two workflows live under `.github/workflows/`:
 
-Required repository secrets:
+| Workflow | Trigger | Purpose |
+|---|---|---|
+| `docker-publish.yml` | push to `main`, tag `v*`, `workflow_dispatch` | Build + push all three images to Docker Hub |
+| `compose-lint.yml` | `pull_request`, push to `main`, `workflow_dispatch` | Validate `compose.yaml`, `compose.build.yaml`, image-variable overrides, and workflow YAML on every PR |
+
+Required repository secrets (publish workflow only):
 
 | Secret | Description |
 |---|---|
 | `DOCKERHUB_USERNAME` | Docker Hub account used for `docker login` |
 | `DOCKERHUB_TOKEN` | Personal Access Token with Read/Write/Delete scope |
 
-Optional repository variable:
-
-| Variable | Default | Description |
-|---|---|---|
-| `DOCKERHUB_NAMESPACE` | `gsoperator` | Docker Hub org under which the images are published |
-
 This repository is public, but secrets are not exposed to it: GitHub
 keeps secrets in an encrypted, write-only store. Forks do not inherit
 them, and `pull_request` runs from forks see `secrets == {}`. The
 publish workflow only triggers on `push` from collaborators (and on
-manual dispatch), so secrets only flow to runs you control.
+manual dispatch), so secrets only flow to runs you control. The lint
+workflow runs on PRs from forks but references no secrets.
+
+To publish under a different Docker Hub org or to a different registry,
+edit the `image_name` field per service in the matrix in
+`.github/workflows/docker-publish.yml` directly.
 
 ## Documentation
 

@@ -1,0 +1,88 @@
+#=============================================================================
+# Validate compose.yaml and compose.build.yaml on every pull request and
+# every push to main, so a broken compose change is caught before it lands.
+#
+# Repository: https://github.com/Grace-Solutions/OpenRPort
+#
+# What this checks:
+#   1. compose.yaml (runtime-only) parses with .env.example as the env source.
+#   2. compose.yaml + compose.build.yaml (build override) parses as well.
+#   3. The OPENRPORT_<SVC>_IMAGE / OPENRPORT_IMAGE_TAG variables are honoured
+#      when overridden -- a regression that hardcoded an image name would
+#      otherwise pass `config -q` silently.
+#   4. The workflow YAMLs themselves parse.
+#
+# Runs on `pull_request` from forks safely: no secrets are referenced and
+# `permissions: contents: read` is the minimum needed to check out.
+#=============================================================================
+name: Lint compose & workflows
+
+on:
+  pull_request:
+    paths:
+      - 'compose.yaml'
+      - 'compose.build.yaml'
+      - '.env.example'
+      - '.github/workflows/**'
+      - 'Container/**/Dockerfile'
+  push:
+    branches: [main]
+    paths:
+      - 'compose.yaml'
+      - 'compose.build.yaml'
+      - '.env.example'
+      - '.github/workflows/**'
+      - 'Container/**/Dockerfile'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: compose & workflow yaml
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show docker compose version
+        run: docker compose version
+
+      - name: Validate runtime compose (compose.yaml only)
+        run: docker compose --env-file .env.example config -q
+
+      - name: Validate build override (compose.yaml + compose.build.yaml)
+        run: docker compose --env-file .env.example -f compose.yaml -f compose.build.yaml config -q
+
+      - name: Verify image variables resolve to the documented defaults
+        run: |
+          set -e
+          out=$(docker compose --env-file .env.example config | grep -E '^[[:space:]]*image:')
+          echo "$out"
+          echo "$out" | grep -q 'gsoperator/openrport-server:latest'
+          echo "$out" | grep -q 'gsoperator/openrport-pairing:latest'
+          echo "$out" | grep -q 'gsoperator/openrport-ui:latest'
+
+      - name: Verify per-service image override works (custom registry + tag)
+        env:
+          OPENRPORT_SERVER_IMAGE: ghcr.io/grace-solutions/openrport-server
+          OPENRPORT_PAIRING_IMAGE: ghcr.io/grace-solutions/openrport-pairing
+          OPENRPORT_UI_IMAGE: ghcr.io/grace-solutions/openrport-ui
+          OPENRPORT_IMAGE_TAG: v1.2.3
+        run: |
+          set -e
+          out=$(docker compose --env-file .env.example config | grep -E '^[[:space:]]*image:')
+          echo "$out"
+          echo "$out" | grep -q 'ghcr.io/grace-solutions/openrport-server:v1.2.3'
+          echo "$out" | grep -q 'ghcr.io/grace-solutions/openrport-pairing:v1.2.3'
+          echo "$out" | grep -q 'ghcr.io/grace-solutions/openrport-ui:v1.2.3'
+
+      - name: Validate workflow YAML files
+        run: |
+          set -e
+          for f in .github/workflows/*.yml .github/workflows/*.yaml; do
+            [ -e "$f" ] || continue
+            python3 -c "import sys, yaml; yaml.safe_load(open('$f'))"
+            echo "OK: $f"
+          done

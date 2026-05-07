@@ -40,7 +40,7 @@ lint: ## Lint shell scripts (requires shellcheck)
 	@which shellcheck >/dev/null 2>&1 || (echo "shellcheck not found - skipping"; exit 0)
 	@shellcheck scripts/*.sh Container/*/entrypoint.sh || true
 
-pull: ## Pull all images from the registry (per OPENRPORT_IMAGE_NAMESPACE/TAG)
+pull: ## Pull all images from the registry (per OPENRPORT_<SVC>_IMAGE/TAG)
 	$(COMPOSE_RUN) pull
 
 build: prepare ## Build all container images locally (compose.yaml + compose.build.yaml)

@@ -1,6 +1,11 @@
 #=============================================================================
 # OPENRPORT - Unified stack (Server + Pairing + UI)
-# https://github.com/openrport/openrport
+#
+# Repository : https://github.com/Grace-Solutions/OpenRPort
+# Upstream   : https://github.com/openrport/openrport
+# Images     : https://hub.docker.com/r/gsoperator/openrport-server
+#              https://hub.docker.com/r/gsoperator/openrport-pairing
+#              https://hub.docker.com/r/gsoperator/openrport-ui
 #=============================================================================
 #
 # CREDENTIALS:
@@ -17,18 +22,25 @@
 # IMAGES:
 #   This file is runtime-only -- it just references images by name. The
 #   three services are pulled from a Docker registry; no local build is
-#   performed.
+#   performed. Each service has its own fully-qualified image name in a
+#   single variable so any of them can be swapped independently (private
+#   fork of just the UI, custom server build, etc.) without touching the
+#   other two:
 #
-#     <namespace>/openrport-{server,pairing,ui}:<tag>
+#     OPENRPORT_SERVER_IMAGE   default: gsoperator/openrport-server
+#     OPENRPORT_PAIRING_IMAGE  default: gsoperator/openrport-pairing
+#     OPENRPORT_UI_IMAGE       default: gsoperator/openrport-ui
+#     OPENRPORT_IMAGE_TAG      default: latest
 #
-#   Both pieces are parameterized:
+#   The image variable holds the full registry path (host + namespace +
+#   repository), so any of these are valid values:
 #
-#     OPENRPORT_IMAGE_NAMESPACE  default: gsoperator         (Docker Hub org)
-#                                may include a registry prefix, e.g.
-#                                ghcr.io/grace-solutions or
-#                                localhost:5000/test
-#     OPENRPORT_IMAGE_TAG        default: latest             (pin to a
-#                                short commit SHA for reproducible deploys)
+#     gsoperator/openrport-server                       (Docker Hub)
+#     ghcr.io/grace-solutions/openrport-server          (GHCR)
+#     localhost:5000/openrport-server                   (local registry)
+#     my-registry.internal/openrport/server             (private mirror)
+#
+#   Pin OPENRPORT_IMAGE_TAG to a short commit SHA for reproducible deploys.
 #
 # LOCAL DEVELOPMENT:
 #   `make build` overlays compose.build.yaml on top of this file and
@@ -66,7 +78,7 @@ name: '${STACK_NAME:-stk-openrport-00001}'
 
 services:
   Server:
-    image: '${OPENRPORT_IMAGE_NAMESPACE:-gsoperator}/openrport-server:${OPENRPORT_IMAGE_TAG:-latest}'
+    image: '${OPENRPORT_SERVER_IMAGE:-gsoperator/openrport-server}:${OPENRPORT_IMAGE_TAG:-latest}'
     container_name: 'OPENRPORT-SERVER-00001'
     restart: unless-stopped
     stop_signal: SIGTERM
@@ -115,7 +127,7 @@ services:
       com.centurylinklabs.watchtower.enable: '${SERVER_ENABLEAUTOMATICUPDATES:-false}'
 
   Pairing:
-    image: '${OPENRPORT_IMAGE_NAMESPACE:-gsoperator}/openrport-pairing:${OPENRPORT_IMAGE_TAG:-latest}'
+    image: '${OPENRPORT_PAIRING_IMAGE:-gsoperator/openrport-pairing}:${OPENRPORT_IMAGE_TAG:-latest}'
     container_name: 'OPENRPORT-PAIRING-00001'
     restart: unless-stopped
     stop_signal: SIGTERM
@@ -151,7 +163,7 @@ services:
       com.centurylinklabs.watchtower.enable: '${PAIRING_ENABLEAUTOMATICUPDATES:-false}'
 
   UI:
-    image: '${OPENRPORT_IMAGE_NAMESPACE:-gsoperator}/openrport-ui:${OPENRPORT_IMAGE_TAG:-latest}'
+    image: '${OPENRPORT_UI_IMAGE:-gsoperator/openrport-ui}:${OPENRPORT_IMAGE_TAG:-latest}'
     container_name: 'OPENRPORT-UI-00001'
     restart: unless-stopped
     stop_signal: SIGTERM

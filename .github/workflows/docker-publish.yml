@@ -1,5 +1,10 @@
 #=============================================================================
-# Build and publish OpenRPort container images to Docker Hub.
+# Build and publish OpenRPort container images.
+#
+# Repository : https://github.com/Grace-Solutions/OpenRPort
+# Images     : https://hub.docker.com/r/gsoperator/openrport-server
+#              https://hub.docker.com/r/gsoperator/openrport-pairing
+#              https://hub.docker.com/r/gsoperator/openrport-ui
 #
 # Triggers:
 #   - push to main           -> :latest + :<short-sha>
@@ -15,12 +20,10 @@
 # forks or to PR runs from forks. They are only available on `push` events
 # from collaborators and on `workflow_dispatch` runs.
 #
-# Optional repository variable (Settings -> Secrets and variables -> Actions
-# -> Variables):
-#   DOCKERHUB_NAMESPACE      Docker Hub org/user under which the images are
-#                            published. Defaults to `gsoperator` if not set.
-#                            Override to publish under a different account
-#                            without editing this file.
+# To publish under a different Docker Hub org or to a different registry,
+# edit the `image_name` field in the matrix below directly. There is no
+# namespace indirection -- the full registry path lives in one place per
+# service so each can be swapped independently.
 #=============================================================================
 name: Publish container images
 
@@ -38,9 +41,6 @@ on:
 permissions:
   contents: read
 
-env:
-  DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE || 'gsoperator' }}
-
 jobs:
   build-push:
     name: ${{ matrix.service }}
@@ -50,12 +50,15 @@ jobs:
       matrix:
         include:
           - service: server
+            image_name: gsoperator/openrport-server
             dockerfile: Container/Server/Dockerfile
             build_args: ''
           - service: pairing
+            image_name: gsoperator/openrport-pairing
             dockerfile: Container/Pairing/Dockerfile
             build_args: ''
           - service: ui
+            image_name: gsoperator/openrport-ui
             dockerfile: Container/Ui/Dockerfile
             build_args: |
               NUXT_APP_BASE_URL=/ui
@@ -77,7 +80,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.DOCKERHUB_NAMESPACE }}/openrport-${{ matrix.service }}
+          images: ${{ matrix.image_name }}
           # Tagging strategy:
           #   - main branch pushes: :latest, :<short-sha>
           #   - version tags (vX.Y.Z): :X.Y.Z, :X.Y, :<short-sha>
@@ -111,4 +114,4 @@ jobs:
           cache-to: type=gha,mode=max,scope=openrport-${{ matrix.service }}
 
       - name: Image digest
-        run: echo "Pushed ${{ env.DOCKERHUB_NAMESPACE }}/openrport-${{ matrix.service }} with tags - ${{ steps.meta.outputs.tags }}"
+        run: echo "Pushed ${{ matrix.image_name }} with tags - ${{ steps.meta.outputs.tags }}"
