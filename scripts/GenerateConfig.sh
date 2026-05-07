@@ -44,6 +44,10 @@ PAIRING_BIND="${OPENRPORT_PAIRING_BIND_ADDRESS:-$BIND_DEFAULT}"
 # inside that pool. Defaults match upstream rportd.
 TUNNEL_USED_PORTS="${OPENRPORT_TUNNEL_USED_PORTS:-38200-38400}"
 TUNNEL_EXCLUDED_PORTS="${OPENRPORT_TUNNEL_EXCLUDED_PORTS:-1-1024}"
+# Optional dedicated tunnel hostname/IP. When set, rportd uses this instead
+# of the API URL host when generating tunnel links - required behind L7
+# reverse proxies that cannot forward raw TCP/UDP.
+TUNNEL_HOST="${OPENRPORT_TUNNEL_HOST:-}"
 
 # Convert comma-separated lists into TOML array form: 'a','b','c'
 toml_array() {
@@ -106,6 +110,11 @@ pairing_url    = "${PAIRING_URL}"
 used_ports     = [${TUNNEL_USED_PORTS_TOML}]
 excluded_ports = [${TUNNEL_EXCLUDED_PORTS_TOML}]
 auth_multiuse_creds = true
+EOF
+if [ -n "$TUNNEL_HOST" ]; then
+  echo "tunnel_host    = \"${TUNNEL_HOST}\"" >> "$RPORTD_CONF"
+fi
+cat >> "$RPORTD_CONF" <<EOF
 
 [api]
 address     = "${SERVER_API_BIND}:${SERVER_API_INTERNAL_PORT}"

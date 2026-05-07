@@ -80,22 +80,67 @@ you allow).
 ### Public URLs (what agents and browsers hit)
 
 ```env
-OPENRPORT_SERVER_PUBLIC_URL=         # agent connect URL (chisel)
+OPENRPORT_SERVER_PUBLIC_URL=         # agent connect URL (chisel WS)
 OPENRPORT_SERVER_API_URL=            # browser-facing REST API URL
 OPENRPORT_PAIRING_PUBLIC_URL=        # pairing endpoints
 OPENRPORT_UI_PUBLIC_URL=             # web UI
 OPENRPORT_BINARIES_PUBLIC_URL=       # static agent binaries
+OPENRPORT_TUNNEL_HOST=               # hostname/IP for tunnel link generation
 ```
-
-`OPENRPORT_SERVER_PUBLIC_URL` is the most consequential — it is baked
-into rendered installer scripts, so this is the URL every agent uses to
-phone home. Once agents are out in the field, changing it means
-re-issuing installers (or migrating with `--server <new>`).
 
 `OPENRPORT_SERVER_API_URL` is what the UI fetches the REST API from in
 the browser. In subpath mode behind a single edge it can be left blank
 (the UI uses a relative URL on its own origin); in subdomain or
 split-port modes set it to the absolute API URL.
+
+`OPENRPORT_TUNNEL_HOST` controls the host part of the URLs rportd shows
+operators when a tunnel is running. Set it whenever the API/UI sits
+behind an L7 reverse proxy (nginx, Traefik, Caddy) that cannot forward
+raw TCP/UDP — the tunnel ports are raw TCP and bypass the proxy, so
+their links must point at a hostname/IP that maps directly to the stack
+host on whichever interface `OPENRPORT_SERVER_CLIENT_BIND_ADDRESS`
+resolves to.
+
+### Agent connect URL (how it is defined and threaded)
+
+The "agent connect URL" — the URL every agent uses to phone home — is
+`OPENRPORT_SERVER_PUBLIC_URL`. It is the most consequential single
+setting in the stack because it is baked into every rendered installer
+script; once agents are deployed, changing it means re-issuing installers
+(or running `rport --server <new>` on each host).
+
+The chain it travels through:
+
+```
+.env
+  OPENRPORT_SERVER_PUBLIC_URL=https://rport.example.com
+        │
+        ▼  Container/Server/entrypoint.sh
+rportd.conf
+  [server] url = "https://rport.example.com"
+        │
+        ▼  rportd creates a pairing deposit when an operator
+        │  POSTs /api/v1/clients-auth (or clicks "Add client" in UI)
+        │  → deposit.ConnectUrl = <[server] url>
+        │
+        ▼  rport-pairing stores the deposit under a 7-char code
+        │  and renders it into install scripts on demand
+linux  installer_vars.sh : CONNECT_URL="https://rport.example.com"
+windows vars.ps1         : $connect_url = "https://rport.example.com"
+        │
+        ▼  install scripts write rport.conf on the agent host
+agent rport.conf
+  [client] server = "https://rport.example.com"
+```
+
+Every link in this chain is automatic: set
+`OPENRPORT_SERVER_PUBLIC_URL` once and rportd, the pairing service, and
+every rendered installer agree on it. The other public URLs travel
+through their own direct paths: `OPENRPORT_PAIRING_PUBLIC_URL` →
+`config.toml` `[server] url`; `OPENRPORT_TUNNEL_HOST` → `rportd.conf`
+`[server] tunnel_host`; the binary-download URLs →
+`config.toml` `[downloads]` → installer vars
+(`BINARIES_BASE_URL` / `$binaries_base_url`).
 
 ### Required ports inbound from the internet
 
@@ -111,6 +156,126 @@ The tunnel pool ports are raw TCP — they do **not** go through the
 reverse proxy. Forward / firewall the entire range
 (`OPENRPORT_TUNNEL_USED_PORTS`) directly to the stack host on whichever
 interface `OPENRPORT_SERVER_CLIENT_BIND_ADDRESS` resolves to.
+
+## Connection flow
+
+Two flows matter: how an agent gets installed and connected (control
+plane), and how an operator reaches a service running behind that agent
+(data plane). Sample IPs are illustrative — substitute your own.
+
+### 1. Onboarding and agent control channel
+
+```
+   ┌───────────────────────┐                         ┌──────────────────────────┐
+   │ Operator browser      │ 1. open UI / create     │ Edge firewall + reverse  │
+   │ 198.51.100.10         │    pairing code         │ proxy (nginx/Traefik)    │
+   │                       │ ───────────────────────▶│ 203.0.113.20  :443       │
+   └───────────────────────┘                         └────────────┬─────────────┘
+                                                                  │ TLS-terminated,
+                                                                  │ then HTTP to:
+                                                                  ▼
+                                                  ┌──────────────────────────────┐
+                                                  │ OpenRPort stack host         │
+                                                  │ 10.0.0.5  (network_mode: host│
+                                                  │   :38100 API, :38101 chisel, │
+                                                  │   :38102 Pairing, :38103 UI, │
+                                                  │   :38200-38400 tunnel pool)  │
+                                                  └────────────┬─────────────────┘
+                                                               │
+   ┌───────────────────────┐                                   │
+   │ Target host (agent)   │ 2. curl https://rport.example.com/pairing/<code>|sh
+   │ 192.0.2.50            │ ─────────────────────────────────▶│  Pairing renders
+   │ behind NAT, no inbound│                                   │  installer with
+   │                       │ 3. installer downloads agent     │  CONNECT_URL +
+   │                       │    binary (server or S3 mirror) ─▶  BINARIES_BASE_URL
+   │                       │ 4. agent dials chisel WS to       │
+   │                       │    OPENRPORT_SERVER_PUBLIC_URL ──▶│  rportd  :38101
+   │                       │◀──── persistent control channel ──┤  (out-of-band:
+   │                       │                                   │   no inbound
+   │                       │                                   │   firewall on
+   │                       │                                   │   agent side)
+   └───────────────────────┘                                   └──────────────────┘
+```
+
+The agent only needs **outbound 443** (or whichever port
+`OPENRPORT_SERVER_PUBLIC_URL` resolves to). Everything else rides on
+that single chisel WebSocket.
+
+### 2. Reverse-tunnel data path (operator → service behind agent)
+
+```
+                              tunnel pool port (raw TCP, bypasses proxy)
+                              ┌──────────────────────────────────────────┐
+                              │                                          ▼
+   ┌───────────────────────┐  │  ┌──────────────────────────────┐  ┌──────────────┐
+   │ Operator              │──┘  │ Stack host  10.0.0.5         │  │ rportd       │
+   │ 198.51.100.10         │     │ tunnels.rport.example.com    │──│ 0.0.0.0:38250│
+   │  rdp / ssh / browser /│────▶│   :38250  (allocated from    │  │ (allocated)  │
+   │  curl  to             │     │   OPENRPORT_TUNNEL_USED_PORTS)  └──────┬───────┘
+   │  tunnels.rport....    │     └──────────────────────────────┘         │
+   │     :38250            │                                              │ multiplexed
+   └───────────────────────┘                                              │ over the
+                                                                          ▼ existing chisel WS
+                                                       ┌──────────────────────────┐
+                                                       │ Agent  192.0.2.50        │
+                                                       │  rport client            │
+                                                       │  forwards 38250 →        │
+                                                       │  127.0.0.1:<svc>         │
+                                                       └────────────┬─────────────┘
+                                                                    ▼
+                                                  ┌──────────────────────────────────┐
+                                                  │ Local service on the agent host  │
+                                                  │   :3389  RDP                     │
+                                                  │   :22    SSH                     │
+                                                  │   :80    intranet web            │
+                                                  │   :5432  Postgres (TCP)          │
+                                                  │   :161   SNMP (UDP)              │
+                                                  └──────────────────────────────────┘
+```
+
+What the operator sees in the UI: `tunnels.rport.example.com:38250` (or
+whatever `OPENRPORT_TUNNEL_HOST` resolves to, falling back to the API
+host). The TCP/UDP connection lands on rportd's allocated pool port,
+gets multiplexed onto the agent's existing chisel WebSocket, and the
+agent forwards it to the chosen `127.0.0.1:<port>` on its loopback —
+no inbound firewall change on the agent side.
+
+### 3. Agent binary delivery (server-hosted vs. S3 mirror)
+
+```
+                         ┌──────────────────────────────────────────┐
+                         │ Pairing service renders installer with    │
+                         │   BINARIES_BASE_URL = OPENRPORT_BINARIES_PUBLIC_URL
+                         └──────────────────────────────────────────┘
+                                  │
+              ┌───────────────────┴────────────────────┐
+              ▼                                        ▼
+    DEFAULT (server-hosted)                   OPTIONAL (S3 / CDN mirror)
+    ┌─────────────────────────────┐           ┌─────────────────────────────┐
+    │ OPENRPORT_BINARIES_PUBLIC_  │           │ OPENRPORT_BINARIES_PUBLIC_  │
+    │   URL=https://rport...      │           │   URL=https://cdn.example...│
+    │   /binaries                 │           │   /openrport/binaries       │
+    │                             │           │                             │
+    │ Pairing serves the files    │           │ Bucket holds the same       │
+    │ bind-mounted from           │           │ layout (rport_<os>_<arch>   │
+    │ Data/OpenRPort/Binaries/    │           │ + checksum). No traffic     │
+    │ via [downloads] in          │           │ hits the stack for the      │
+    │ config.toml.                │           │ binary download itself.     │
+    └─────────────────────────────┘           └─────────────────────────────┘
+              │                                        │
+              └────────────────────┬───────────────────┘
+                                   ▼
+                       Agent installer fetches:
+                         <BINARIES_BASE_URL>/rport_<os>_<arch>.tar.gz
+                         <BINARIES_BASE_URL>/rport_<os>_<arch>.sha256
+```
+
+To switch to an S3/CDN mirror: upload the contents of
+`Data/OpenRPort/Binaries/` to your bucket (preserving the filenames /
+checksum sidecars) and point `OPENRPORT_BINARIES_PUBLIC_URL` at the
+public base URL. Pairing-rendered installers will fetch from there
+instead of the stack — useful when agents are far from the server or
+when you want to keep the stack off the binary-download hot path.
 
 ## Deployment scenarios
 

@@ -54,6 +54,7 @@ else
   TUNNEL_EXCLUDED_PORTS="${OPENRPORT_TUNNEL_EXCLUDED_PORTS:-1-1024}"
   TUNNEL_USED_PORTS_TOML=$(toml_array "$TUNNEL_USED_PORTS")
   TUNNEL_EXCLUDED_PORTS_TOML=$(toml_array "$TUNNEL_EXCLUDED_PORTS")
+  TUNNEL_HOST="${OPENRPORT_TUNNEL_HOST:-}"
 
   cat > "$CONFIG_LIVE" <<CONF
 # Rendered by Container/Server/entrypoint.sh from environment variables.
@@ -68,6 +69,11 @@ pairing_url         = "${FALLBACK_PAIRING_URL}"
 used_ports          = [${TUNNEL_USED_PORTS_TOML}]
 excluded_ports      = [${TUNNEL_EXCLUDED_PORTS_TOML}]
 auth_multiuse_creds = true
+CONF
+  if [ -n "$TUNNEL_HOST" ]; then
+    echo "tunnel_host         = \"${TUNNEL_HOST}\"" >> "$CONFIG_LIVE"
+  fi
+  cat >> "$CONFIG_LIVE" <<CONF
 
 [api]
 address    = "${API_BIND}:${API_PORT}"
