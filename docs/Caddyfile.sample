@@ -1,0 +1,87 @@
+# OpenRPort Unified - sample Caddyfile reverse-proxy configuration
+#
+# Mirrors docs/nginx.sample.conf. Caddy obtains its TLS certificate from
+# Let's Encrypt automatically based on the site address; supply your own
+# cert with `tls /path/cert /path/key` if you do not want ACME.
+#
+# Substitute the variables in {curly braces} for your environment:
+#   {SERVER_NAME}                 - DNS name of this edge, e.g. rport.example.com
+#   {STACK_HOST}                  - LAN IP of the Linux VM running the docker
+#                                   stack. Use 127.0.0.1 only if Caddy and the
+#                                   stack run on the same VM. The samples below
+#                                   assume Caddy is on a separate host:
+#                                       proxy host  10.0.0.4
+#                                       stack VM    10.0.0.5   <- {STACK_HOST}
+#   {SERVER_API_PUBLISH_PORT}     - default 38100  (rportd HTTP API)
+#   {SERVER_CLIENT_PUBLISH_PORT}  - default 38101  (rportd chisel WS)
+#   {PAIRING_PUBLISH_PORT}        - default 38102  (rport-pairing + binaries)
+#   {UI_PUBLISH_PORT}             - default 38103  (Nuxt UI)
+#
+# Caddy upgrades WebSockets transparently and follows X-Forwarded-* by
+# default, so the per-location WS hints needed in nginx are unnecessary.
+
+rport.example.com {
+	# Logs (optional - drop or redirect as you like).
+	log {
+		output file /var/log/caddy/rport.example.com.log
+		format console
+	}
+
+	# rport agents push moderate file sizes; tunnel data goes through chisel
+	# (HTTP Upgrade) and is not bound by this limit.
+	request_body {
+		max_size 10MB
+	}
+
+	# ---------- rportd HTTP API ----------
+	# `handle` keeps the matched prefix in the upstream request (the API
+	# serves under /api/v1/...). Use `handle_path` only when the upstream
+	# expects the prefix stripped - see /pairing/ below.
+	handle /api/* {
+		reverse_proxy 10.0.0.5:38100 # {STACK_HOST}:{SERVER_API_PUBLISH_PORT}
+	}
+
+	# ---------- Nuxt UI ----------
+	handle /ui/* {
+		reverse_proxy 10.0.0.5:38103 # {STACK_HOST}:{UI_PUBLISH_PORT}
+	}
+
+	# ---------- Static agent binaries (served by pairing) ----------
+	handle /binaries/* {
+		reverse_proxy 10.0.0.5:38102 # {STACK_HOST}:{PAIRING_PUBLISH_PORT}
+	}
+
+	# ---------- rport-pairing ----------
+	# The pairing service serves bare "/", "/update", "/{code}" - strip the
+	# /pairing/ prefix before forwarding. The pairing service injects the
+	# configured download URLs directly into the rendered scripts via the
+	# OPENRPORT_PAIRING_DOWNLOADS_* env vars, so no body rewriting is needed.
+	handle_path /pairing/* {
+		reverse_proxy 10.0.0.5:38102 # {STACK_HOST}:{PAIRING_PUBLISH_PORT}
+	}
+
+	# ---------- rportd agent connect (chisel WS) ----------
+	# Catch-all: agents connect over chisel WS to https://<edge>/ via HTTP
+	# Upgrade, which Caddy forwards transparently to the rportd client port.
+	handle {
+		reverse_proxy 10.0.0.5:38101 # {STACK_HOST}:{SERVER_CLIENT_PUBLISH_PORT}
+	}
+}
+
+# ---------- Notes ----------
+# 1. ACME / TLS:
+#      For automatic certs from Let's Encrypt, point {SERVER_NAME}'s public
+#      A/AAAA record at this Caddy host before reload. To pin a cert manually
+#      add `tls /etc/caddy/ssl/fullchain.pem /etc/caddy/ssl/privkey.pem`
+#      inside the site block.
+# 2. UI:       https://rport.example.com/ui/   (admin / RPORTD_API_PASSWORD)
+# 3. API:      https://rport.example.com/api/v1/*
+# 4. Binaries: https://rport.example.com/binaries/rport/stable/<arch>.tar.gz
+# 5. Pairing:  curl https://rport.example.com/pairing/<7-char-code> | sh
+# 6. Reverse-tunnel ports do NOT pass through Caddy. The pool defined by
+#    OPENRPORT_TUNNEL_USED_PORTS (default 38200-38400, raw TCP/UDP) must be
+#    forwarded directly from the edge firewall to {STACK_HOST}, NOT to this
+#    proxy. Caddy's `layer4` plugin can proxy raw streams but it gives you
+#    nothing here - the firewall DNAT is simpler. Set OPENRPORT_TUNNEL_HOST
+#    to a DNS name resolving to {STACK_HOST} (e.g. tunnels.rport.example.com)
+#    so rportd-generated tunnel links bypass the proxy entirely.

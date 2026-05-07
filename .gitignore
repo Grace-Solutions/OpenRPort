@@ -1,8 +1,11 @@
 # Environment (never commit secrets)
 .env
 
-# Local-only nginx for the operator's domain (sample is at docs/nginx.sample.conf)
-nginx.local.conf
+# Local-only reverse-proxy configs (real domains/IPs/cert paths).
+# Sanitised samples live alongside as docs/<proxy>.sample.* and are tracked.
+docs/nginx.local.conf
+docs/Caddyfile.local
+docs/haproxy.local.cfg
 docs/nginx.txt
 
 # Stack data (bind mounts under STACK_BINDMOUNTROOT, default-local at ./Data)

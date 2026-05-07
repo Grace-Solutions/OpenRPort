@@ -177,26 +177,29 @@ plane), and how an operator reaches a service running behind that agent
                   ▼                                                   ▼
    ╔══════════════════════════════════════════════════════════════════════════════╗
    ║  Edge firewall                                            203.0.113.20       ║
-   ║  inbound allow:  tcp/443 (operators + agents)                                ║
-   ║                  tcp/38200-38400 (tunnel pool, raw TCP, see diagram 2)       ║
-   ║  DNAT:           tcp/443           -> 10.0.0.5:443                           ║
-   ║                  tcp/38200-38400   -> 10.0.0.5:38200-38400                   ║
+   ║  inbound allow:  tcp/443           (operators + agents, HTTPS / chisel WS)   ║
+   ║                  tcp+udp/38200-38400 (tunnel pool, raw TCP/UDP, diagram 2)   ║
+   ║  DNAT:           tcp/443             -> 10.0.0.4:443           (proxy host)  ║
+   ║                  tcp+udp/38200-38400 -> 10.0.0.5:38200-38400   (stack VM)    ║
+   ║                                         ^ tunnel pool BYPASSES the proxy     ║
    ╚══════════════════════════════════════════════════════════════════════════════╝
-                  │
+                  │ HTTPS :443 only
                   ▼
    ╔══════════════════════════════════════════════════════════════════════════════╗
-   ║  Reverse proxy (nginx / Traefik / Caddy)              10.0.0.5:443           ║
-   ║  TLS termination for rport.example.com, then HTTP upstream:                  ║
-   ║    /api/      -> 127.0.0.1:38100   (rportd API)                              ║
-   ║    /ui/       -> 127.0.0.1:38103   (Nuxt UI)                                 ║
-   ║    /pairing/  -> 127.0.0.1:38102   (rport-pairing)                           ║
-   ║    /binaries/ -> 127.0.0.1:38102   (rport-pairing /binaries)                 ║
-   ║    /          -> 127.0.0.1:38101   (chisel WS, catch-all, Upgrade headers)   ║
+   ║  Reverse proxy host (nginx / Traefik / Caddy / HAProxy)     10.0.0.4:443     ║
+   ║  TLS termination for rport.example.com, then HTTP upstream to the stack VM:  ║
+   ║    /api/      -> 10.0.0.5:38100   (rportd API)                               ║
+   ║    /ui/       -> 10.0.0.5:38103   (Nuxt UI)                                  ║
+   ║    /pairing/  -> 10.0.0.5:38102   (rport-pairing, prefix stripped)           ║
+   ║    /binaries/ -> 10.0.0.5:38102   (rport-pairing /binaries/*)                ║
+   ║    /          -> 10.0.0.5:38101   (chisel WS catch-all, Upgrade headers)     ║
+   ║  Sample configs: docs/nginx.sample.conf  docs/Caddyfile.sample               ║
+   ║                  docs/haproxy.sample.cfg                                     ║
    ╚══════════════════════════════════════════════════════════════════════════════╝
-                  │
+                  │ HTTP to stack VM ports 38100-38103 over LAN
                   ▼
    ╔══════════════════════════════════════════════════════════════════════════════╗
-   ║  Linux VM (Docker host)                               10.0.0.5               ║
+   ║  Linux VM (Docker host)                                   10.0.0.5           ║
    ║  ┌──────────────────────────────────────────────────────────────────────┐    ║
    ║  │ docker compose stack  (network_mode: host - shares the VM netns)     │    ║
    ║  │  ┌─────────────────────┐ ┌─────────────────────┐ ┌────────────────┐  │    ║
@@ -219,13 +222,17 @@ plane), and how an operator reaches a service running behind that agent
        BINARIES_BASE_URL=<OPENRPORT_BINARIES_PUBLIC_URL>     (see diagram 3)
    ④ Installer downloads the agent binary, then the agent dials
        wss://rport.example.com  -- outbound only, traverses agent NAT,
-       hits the edge firewall, proxy upgrades to chisel, control channel
-       is now open and persistent.
+       hits the edge firewall, lands on the proxy, proxy upgrades to
+       chisel and forwards to 10.0.0.5:38101. Control channel is now
+       open and persistent.
 ```
 
 The agent only needs **outbound** to `OPENRPORT_SERVER_PUBLIC_URL`
 (typically `:443`). No inbound firewall change is ever required on the
 agent host. Everything else rides on that single chisel WebSocket.
+
+If the proxy and the stack run on the same VM, collapse `10.0.0.4` and
+`10.0.0.5` into one host and use `127.0.0.1` for the proxy upstreams.
 
 ### 2. Reverse-tunnel data path (operator → service behind agent)
 
@@ -492,7 +499,9 @@ specific surface per deployment with `OPENRPORT_UI_AUTH_MODE`
 - [`docs/COMPOSE-SPEC.md`](docs/COMPOSE-SPEC.md) — service / volume / network specification
 - [`docs/ENV-SPEC.md`](docs/ENV-SPEC.md) — env-var reference grouped by service
 - [`docs/AgentHandoff.md`](docs/AgentHandoff.md) — operator runbook
-- [`docs/nginx.sample.conf`](docs/nginx.sample.conf) — reference edge reverse proxy
+- [`docs/nginx.sample.conf`](docs/nginx.sample.conf) — sample nginx edge reverse proxy
+- [`docs/Caddyfile.sample`](docs/Caddyfile.sample) — sample Caddy edge reverse proxy
+- [`docs/haproxy.sample.cfg`](docs/haproxy.sample.cfg) — sample HAProxy edge reverse proxy
 
 ## License
 
