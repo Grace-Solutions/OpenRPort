@@ -440,13 +440,13 @@ docker run -d --network host --name openrport-server \
   -e OPENRPORT_TUNNEL_USED_PORTS=38200-38400 \
   -e OPENRPORT_SERVER_PUBLIC_URL=https://rport.example.com \
   -e OPENRPORT_PAIRING_PUBLIC_URL=https://rport.example.com/pairing \
-  openrport/server:local
+  gsoperator/openrport-server:latest
 
 docker run -d --network host --name openrport-pairing \
   -e PAIRING_INTERNAL_PORT=38102 \
   -e OPENRPORT_PAIRING_PUBLIC_URL=https://rport.example.com/pairing \
   -e OPENRPORT_PAIRING_DOWNLOADS_BINARIES_BASE_URL=https://rport.example.com/binaries \
-  openrport/pairing:local
+  gsoperator/openrport-pairing:latest
 ```
 
 A bind-mounted `/etc/rport/rportd.conf` (or

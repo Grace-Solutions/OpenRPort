@@ -10,9 +10,18 @@
 # PRODUCTION SETUP:
 #   1. cp .env.example .env && edit secrets
 #   2. make prepare      (fetches agent binaries, generates configs)
-#   3. make up           (build + start)
+#   3. docker compose pull && docker compose up -d
+#      (or `make up` to build locally instead of pulling)
 #   4. Point your edge reverse proxy at the host ports below
 #      and use examples/nginx.sample.conf as a starting point.
+#
+# IMAGES:
+#   The three services pull from Docker Hub by default
+#   (gsoperator/openrport-{server,pairing,ui}). Pin a specific build
+#   by setting OPENRPORT_IMAGE_TAG=<short-sha> in .env; defaults to
+#   'latest'. The `build:` blocks below are retained so `docker compose
+#   build` still works for local development -- the resulting image is
+#   retagged with the remote name and used in place of the pulled one.
 #
 # NETWORKING:
 #   All three services run with network_mode: host. They listen directly on
@@ -46,7 +55,7 @@ services:
     build:
       context: .
       dockerfile: Container/Server/Dockerfile
-    image: 'openrport/server:local'
+    image: 'gsoperator/openrport-server:${OPENRPORT_IMAGE_TAG:-latest}'
     container_name: 'OPENRPORT-SERVER-00001'
     restart: unless-stopped
     stop_signal: SIGTERM
@@ -98,7 +107,7 @@ services:
     build:
       context: .
       dockerfile: Container/Pairing/Dockerfile
-    image: 'openrport/pairing:local'
+    image: 'gsoperator/openrport-pairing:${OPENRPORT_IMAGE_TAG:-latest}'
     container_name: 'OPENRPORT-PAIRING-00001'
     restart: unless-stopped
     stop_signal: SIGTERM
@@ -139,7 +148,7 @@ services:
       dockerfile: Container/Ui/Dockerfile
       args:
         NUXT_APP_BASE_URL: '${OPENRPORT_UI_BASE_PATH:-/ui}'
-    image: 'openrport/ui:local'
+    image: 'gsoperator/openrport-ui:${OPENRPORT_IMAGE_TAG:-latest}'
     container_name: 'OPENRPORT-UI-00001'
     restart: unless-stopped
     stop_signal: SIGTERM
