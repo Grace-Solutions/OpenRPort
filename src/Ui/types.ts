@@ -19,6 +19,7 @@ export interface UpdatesStatus {
 export interface ClientAuth {
 	id: string;
 	password: string;
+	tags?: string[];
 }
 
 export interface ClientAuthResponse {

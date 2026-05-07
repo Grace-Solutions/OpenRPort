@@ -372,7 +372,7 @@ const openAddClientModal = () => {
 };
 
 const openInstallClientModal = async (client: ClientAuth) => {
-	await installClientModal.value?.open(client, statusStore.status);
+	await installClientModal.value?.open(client, statusStore.status, client.tags ?? []);
 };
 
 const closeAddClientModal = () => {
