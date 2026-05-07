@@ -4,7 +4,7 @@
 #
 # Each service runs with network_mode: host and listens directly on its
 # *_INTERNAL_PORT on the host. The operator's external nginx is the single
-# proxy layer and is documented in docs/nginx.sample.conf.
+# proxy layer and is documented in examples/nginx.sample.conf.
 set -euo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"

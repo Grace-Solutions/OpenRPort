@@ -2,11 +2,10 @@
 .env
 
 # Local-only reverse-proxy configs (real domains/IPs/cert paths).
-# Sanitised samples live alongside as docs/<proxy>.sample.* and are tracked.
-docs/nginx.local.conf
-docs/Caddyfile.local
-docs/haproxy.local.cfg
-docs/nginx.txt
+# Sanitised samples live alongside as examples/<proxy>.sample.* and are tracked.
+examples/nginx.local.conf
+examples/Caddyfile.local
+examples/haproxy.local.cfg
 
 # Stack data (bind mounts under STACK_BINDMOUNTROOT, default-local at ./Data)
 Data/

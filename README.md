@@ -193,8 +193,8 @@ plane), and how an operator reaches a service running behind that agent
    ║    /pairing/  -> 10.0.0.5:38102   (rport-pairing, prefix stripped)           ║
    ║    /binaries/ -> 10.0.0.5:38102   (rport-pairing /binaries/*)                ║
    ║    /          -> 10.0.0.5:38101   (chisel WS catch-all, Upgrade headers)     ║
-   ║  Sample configs: docs/nginx.sample.conf  docs/Caddyfile.sample               ║
-   ║                  docs/haproxy.sample.cfg                                     ║
+   ║  Sample configs: examples/nginx.sample.conf  examples/Caddyfile.sample       ║
+   ║                  examples/haproxy.sample.cfg                                 ║
    ╚══════════════════════════════════════════════════════════════════════════════╝
                   │ HTTP to stack VM ports 38100-38103 over LAN
                   ▼
@@ -363,7 +363,7 @@ location /          { proxy_pass http://127.0.0.1:38101;
                       proxy_set_header Connection $connection_upgrade; }
 ```
 
-Full reference: [`docs/nginx.sample.conf`](docs/nginx.sample.conf).
+Full reference: [`examples/nginx.sample.conf`](examples/nginx.sample.conf).
 
 Inbound firewall: `443` only.
 
@@ -496,12 +496,9 @@ specific surface per deployment with `OPENRPORT_UI_AUTH_MODE`
 ## Documentation
 
 - [`.env.example`](.env.example) — every environment variable, annotated
-- [`docs/COMPOSE-SPEC.md`](docs/COMPOSE-SPEC.md) — service / volume / network specification
-- [`docs/ENV-SPEC.md`](docs/ENV-SPEC.md) — env-var reference grouped by service
-- [`docs/AgentHandoff.md`](docs/AgentHandoff.md) — operator runbook
-- [`docs/nginx.sample.conf`](docs/nginx.sample.conf) — sample nginx edge reverse proxy
-- [`docs/Caddyfile.sample`](docs/Caddyfile.sample) — sample Caddy edge reverse proxy
-- [`docs/haproxy.sample.cfg`](docs/haproxy.sample.cfg) — sample HAProxy edge reverse proxy
+- [`examples/nginx.sample.conf`](examples/nginx.sample.conf) — sample nginx edge reverse proxy
+- [`examples/Caddyfile.sample`](examples/Caddyfile.sample) — sample Caddy edge reverse proxy
+- [`examples/haproxy.sample.cfg`](examples/haproxy.sample.cfg) — sample HAProxy edge reverse proxy
 
 ## License
 

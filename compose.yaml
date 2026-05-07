@@ -12,7 +12,7 @@
 #   2. make prepare      (fetches agent binaries, generates configs)
 #   3. make up           (build + start)
 #   4. Point your edge reverse proxy at the host ports below
-#      and use docs/nginx.sample.conf as a starting point.
+#      and use examples/nginx.sample.conf as a starting point.
 #
 # NETWORKING:
 #   All three services run with network_mode: host. They listen directly on
