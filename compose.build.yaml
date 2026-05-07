@@ -1,0 +1,41 @@
+#=============================================================================
+# OPENRPORT - Build override
+#=============================================================================
+#
+# Adds `build:` blocks to the three services defined in compose.yaml.
+# Apply by passing both files to docker compose, in this order:
+#
+#     docker compose -f compose.yaml -f compose.build.yaml build
+#     docker compose -f compose.yaml -f compose.build.yaml up -d
+#
+# The Makefile wraps this:
+#
+#     make build      # build only
+#     make build-up   # build + start (does NOT pull from the registry)
+#
+# The image: line in compose.yaml is reused as the local build's tag, so
+# `docker compose up` (without this override) will pick up the local
+# build automatically until you `docker compose pull` again.
+#
+# CI/CD (.github/workflows/docker-publish.yml) uses these same Dockerfile
+# paths via docker/build-push-action -- not via docker compose -- so any
+# build args declared here must also be declared in the workflow matrix.
+#=============================================================================
+
+services:
+  Server:
+    build:
+      context: .
+      dockerfile: Container/Server/Dockerfile
+
+  Pairing:
+    build:
+      context: .
+      dockerfile: Container/Pairing/Dockerfile
+
+  UI:
+    build:
+      context: .
+      dockerfile: Container/Ui/Dockerfile
+      args:
+        NUXT_APP_BASE_URL: '${OPENRPORT_UI_BASE_PATH:-/ui}'

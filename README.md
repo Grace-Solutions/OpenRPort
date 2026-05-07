@@ -493,6 +493,65 @@ supply the endpoints explicitly with `RPORT_OIDC_AUTHORIZE_URL`,
 specific surface per deployment with `OPENRPORT_UI_AUTH_MODE`
 (`auto` / `basic` / `oidc` / `both`).
 
+## Container images
+
+The three services are published to Docker Hub:
+
+| Repository | Tags |
+|---|---|
+| `gsoperator/openrport-server` | `latest`, `<short-sha>`, `<semver>` |
+| `gsoperator/openrport-pairing` | `latest`, `<short-sha>`, `<semver>` |
+| `gsoperator/openrport-ui` | `latest`, `<short-sha>`, `<semver>` |
+
+Both the namespace and the tag are parameterized in `compose.yaml`:
+
+```
+${OPENRPORT_IMAGE_NAMESPACE:-gsoperator}/openrport-{server,pairing,ui}:${OPENRPORT_IMAGE_TAG:-latest}
+```
+
+Override either in `.env` to publish/pull from a different registry (e.g.
+`OPENRPORT_IMAGE_NAMESPACE=ghcr.io/grace-solutions`) or to pin a
+reproducible deploy (`OPENRPORT_IMAGE_TAG=dba6908`).
+
+### Compose layout
+
+| File | Purpose |
+|---|---|
+| `compose.yaml` | Runtime — references images by name, no build context |
+| `compose.build.yaml` | Build override — adds `build:` blocks for all three services |
+
+```bash
+make pull     # docker compose pull
+make up       # prepare + pull + up
+make build    # build images locally (compose.yaml + compose.build.yaml)
+make build-up # build locally + up (no registry pull)
+```
+
+### CI/CD
+
+`.github/workflows/docker-publish.yml` builds and pushes all three images
+on every push to `main`, on version tags (`v*`), and on manual
+`workflow_dispatch` runs.
+
+Required repository secrets:
+
+| Secret | Description |
+|---|---|
+| `DOCKERHUB_USERNAME` | Docker Hub account used for `docker login` |
+| `DOCKERHUB_TOKEN` | Personal Access Token with Read/Write/Delete scope |
+
+Optional repository variable:
+
+| Variable | Default | Description |
+|---|---|---|
+| `DOCKERHUB_NAMESPACE` | `gsoperator` | Docker Hub org under which the images are published |
+
+This repository is public, but secrets are not exposed to it: GitHub
+keeps secrets in an encrypted, write-only store. Forks do not inherit
+them, and `pull_request` runs from forks see `secrets == {}`. The
+publish workflow only triggers on `push` from collaborators (and on
+manual dispatch), so secrets only flow to runs you control.
+
 ## Documentation
 
 - [`.env.example`](.env.example) — every environment variable, annotated

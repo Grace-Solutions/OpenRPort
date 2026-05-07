@@ -10,18 +10,32 @@
 # PRODUCTION SETUP:
 #   1. cp .env.example .env && edit secrets
 #   2. make prepare      (fetches agent binaries, generates configs)
-#   3. docker compose pull && docker compose up -d
-#      (or `make up` to build locally instead of pulling)
+#   3. make up           (= docker compose pull && docker compose up -d)
 #   4. Point your edge reverse proxy at the host ports below
 #      and use examples/nginx.sample.conf as a starting point.
 #
 # IMAGES:
-#   The three services pull from Docker Hub by default
-#   (gsoperator/openrport-{server,pairing,ui}). Pin a specific build
-#   by setting OPENRPORT_IMAGE_TAG=<short-sha> in .env; defaults to
-#   'latest'. The `build:` blocks below are retained so `docker compose
-#   build` still works for local development -- the resulting image is
-#   retagged with the remote name and used in place of the pulled one.
+#   This file is runtime-only -- it just references images by name. The
+#   three services are pulled from a Docker registry; no local build is
+#   performed.
+#
+#     <namespace>/openrport-{server,pairing,ui}:<tag>
+#
+#   Both pieces are parameterized:
+#
+#     OPENRPORT_IMAGE_NAMESPACE  default: gsoperator         (Docker Hub org)
+#                                may include a registry prefix, e.g.
+#                                ghcr.io/grace-solutions or
+#                                localhost:5000/test
+#     OPENRPORT_IMAGE_TAG        default: latest             (pin to a
+#                                short commit SHA for reproducible deploys)
+#
+# LOCAL DEVELOPMENT:
+#   `make build` overlays compose.build.yaml on top of this file and
+#   rebuilds the three images locally. The build retags them with the
+#   exact same name as the runtime references in this file, so the
+#   resulting `docker compose up` uses the local build instead of the
+#   registry copy.
 #
 # NETWORKING:
 #   All three services run with network_mode: host. They listen directly on
@@ -52,10 +66,7 @@ name: '${STACK_NAME:-stk-openrport-00001}'
 
 services:
   Server:
-    build:
-      context: .
-      dockerfile: Container/Server/Dockerfile
-    image: 'gsoperator/openrport-server:${OPENRPORT_IMAGE_TAG:-latest}'
+    image: '${OPENRPORT_IMAGE_NAMESPACE:-gsoperator}/openrport-server:${OPENRPORT_IMAGE_TAG:-latest}'
     container_name: 'OPENRPORT-SERVER-00001'
     restart: unless-stopped
     stop_signal: SIGTERM
@@ -104,10 +115,7 @@ services:
       com.centurylinklabs.watchtower.enable: '${SERVER_ENABLEAUTOMATICUPDATES:-false}'
 
   Pairing:
-    build:
-      context: .
-      dockerfile: Container/Pairing/Dockerfile
-    image: 'gsoperator/openrport-pairing:${OPENRPORT_IMAGE_TAG:-latest}'
+    image: '${OPENRPORT_IMAGE_NAMESPACE:-gsoperator}/openrport-pairing:${OPENRPORT_IMAGE_TAG:-latest}'
     container_name: 'OPENRPORT-PAIRING-00001'
     restart: unless-stopped
     stop_signal: SIGTERM
@@ -143,12 +151,7 @@ services:
       com.centurylinklabs.watchtower.enable: '${PAIRING_ENABLEAUTOMATICUPDATES:-false}'
 
   UI:
-    build:
-      context: .
-      dockerfile: Container/Ui/Dockerfile
-      args:
-        NUXT_APP_BASE_URL: '${OPENRPORT_UI_BASE_PATH:-/ui}'
-    image: 'gsoperator/openrport-ui:${OPENRPORT_IMAGE_TAG:-latest}'
+    image: '${OPENRPORT_IMAGE_NAMESPACE:-gsoperator}/openrport-ui:${OPENRPORT_IMAGE_TAG:-latest}'
     container_name: 'OPENRPORT-UI-00001'
     restart: unless-stopped
     stop_signal: SIGTERM

@@ -1,6 +1,11 @@
-.PHONY: help setup subtrees update-subtrees generate-config fetch-binaries build-agent agent-binaries prepare build up down test lint validate-env
+.PHONY: help setup subtrees update-subtrees generate-config fetch-binaries build-agent agent-binaries prepare pull build build-up up down test lint validate-env logs status restart clean
 
 SHELL := /bin/bash
+
+# Compose file selection. compose.yaml is runtime-only (image refs);
+# compose.build.yaml layers in the build: blocks for local development.
+COMPOSE_RUN   := docker compose
+COMPOSE_BUILD := docker compose -f compose.yaml -f compose.build.yaml
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -35,28 +40,35 @@ lint: ## Lint shell scripts (requires shellcheck)
 	@which shellcheck >/dev/null 2>&1 || (echo "shellcheck not found - skipping"; exit 0)
 	@shellcheck scripts/*.sh Container/*/entrypoint.sh || true
 
-build: prepare ## Build all container images (after prepare)
-	docker compose build
+pull: ## Pull all images from the registry (per OPENRPORT_IMAGE_NAMESPACE/TAG)
+	$(COMPOSE_RUN) pull
 
-up: build ## Build and start all services
-	docker compose up -d
-	@echo "Services started. Run 'make test' to validate."
+build: prepare ## Build all container images locally (compose.yaml + compose.build.yaml)
+	$(COMPOSE_BUILD) build
+
+build-up: build ## Build locally and start all services (no registry pull)
+	$(COMPOSE_BUILD) up -d
+	@echo "Services started from local build. Run 'make test' to validate."
+
+up: prepare pull ## Pull from registry and start all services
+	$(COMPOSE_RUN) up -d
+	@echo "Services started from registry images. Run 'make test' to validate."
 
 down: ## Stop all services
-	docker compose down
+	$(COMPOSE_RUN) down
 
 test: ## Run the full test stack validation
 	@bash scripts/TestStack.sh
 
 logs: ## Tail logs from all services
-	docker compose logs -f
+	$(COMPOSE_RUN) logs -f
 
 status: ## Show service status
-	docker compose ps
+	$(COMPOSE_RUN) ps
 
 restart: ## Restart all services
-	docker compose restart
+	$(COMPOSE_RUN) restart
 
 clean: ## Stop services and remove volumes (DESTRUCTIVE)
-	docker compose down -v
+	$(COMPOSE_RUN) down -v
 	@echo "All containers and volumes removed."

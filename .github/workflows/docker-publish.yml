@@ -1,0 +1,114 @@
+#=============================================================================
+# Build and publish OpenRPort container images to Docker Hub.
+#
+# Triggers:
+#   - push to main           -> :latest + :<short-sha>
+#   - tag push (v*)          -> :<semver> + :<major.minor> + :<short-sha>
+#                               (and :latest if the tag points at main)
+#   - workflow_dispatch      -> manual run, optional custom tag
+#
+# Required repository secrets (Settings -> Secrets and variables -> Actions):
+#   DOCKERHUB_USERNAME       Docker Hub account or org used for `docker login`
+#   DOCKERHUB_TOKEN          Personal Access Token (Read/Write/Delete)
+#
+# Repository secrets are write-only after creation and are NOT exposed to
+# forks or to PR runs from forks. They are only available on `push` events
+# from collaborators and on `workflow_dispatch` runs.
+#
+# Optional repository variable (Settings -> Secrets and variables -> Actions
+# -> Variables):
+#   DOCKERHUB_NAMESPACE      Docker Hub org/user under which the images are
+#                            published. Defaults to `gsoperator` if not set.
+#                            Override to publish under a different account
+#                            without editing this file.
+#=============================================================================
+name: Publish container images
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      custom_tag:
+        description: 'Extra tag to apply to all three images (optional)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+env:
+  DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE || 'gsoperator' }}
+
+jobs:
+  build-push:
+    name: ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: server
+            dockerfile: Container/Server/Dockerfile
+            build_args: ''
+          - service: pairing
+            dockerfile: Container/Pairing/Dockerfile
+            build_args: ''
+          - service: ui
+            dockerfile: Container/Ui/Dockerfile
+            build_args: |
+              NUXT_APP_BASE_URL=/ui
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels) for ${{ matrix.service }}
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.DOCKERHUB_NAMESPACE }}/openrport-${{ matrix.service }}
+          # Tagging strategy:
+          #   - main branch pushes: :latest, :<short-sha>
+          #   - version tags (vX.Y.Z): :X.Y.Z, :X.Y, :<short-sha>
+          #   - workflow_dispatch with custom_tag: also apply that tag verbatim
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,format=short,prefix=
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=${{ inputs.custom_tag }},enable=${{ github.event_name == 'workflow_dispatch' && inputs.custom_tag != '' }}
+          labels: |
+            org.opencontainers.image.title=openrport-${{ matrix.service }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+
+      - name: Build and push ${{ matrix.service }}
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          # linux/amd64 only for now. linux/arm64 works via QEMU but the
+          # Server build (CGO + sqlite3) takes ~25 min under emulation.
+          # To enable: add 'linux/arm64' here and a 'docker/setup-qemu-action'
+          # step before the Buildx setup above.
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: ${{ matrix.build_args }}
+          cache-from: type=gha,scope=openrport-${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=openrport-${{ matrix.service }}
+
+      - name: Image digest
+        run: echo "Pushed ${{ env.DOCKERHUB_NAMESPACE }}/openrport-${{ matrix.service }} with tags - ${{ steps.meta.outputs.tags }}"
